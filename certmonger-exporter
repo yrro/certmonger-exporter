@@ -1,0 +1,103 @@
+#!/usr/bin/python3
+
+import logging
+import os
+import sys
+
+import dbus
+from prometheus_client import CollectorRegistry, Gauge, write_to_textfile
+from systemd.journal import JournalHandler
+
+
+logger = logging.getLogger('certmonger-exporter')
+
+prom_reg = CollectorRegistry()
+labels = ["nickname", "ca", "storage_type", "storage_location", "storage_nickname", "storage_token"]
+metric_request_ca_error = Gauge("certmonger_request_ca_error", "1 if the CA returned an error when certificate signing was requested", labels, registry=prom_reg)
+metric_request_key_generated_date = Gauge("certmonger_request_key_generated_date_seconds", "Timestamp the private key was generated", labels, registry=prom_reg)
+metric_request_key_issued_count = Gauge("certmonger_request_key_issued_count", "number of times a certificate was issued for the private key", labels, registry=prom_reg)
+metric_request_last_checked = Gauge("certmonger_request_last_checked_date_seconds", "?", labels, registry=prom_reg)
+metric_request_not_valid_after = Gauge("certmonger_request_not_valid_after_date_seconds", "Timestamp of certificate expiry", labels, registry=prom_reg)
+metric_request_not_valid_before = Gauge("certmonger_request_not_valid_before_date_seconds", "Timestamp after which certificate is valid", labels, registry=prom_reg)
+metric_request_stuck = Gauge("certmonger_request_stuck", "1 if request is stuck", labels, registry=prom_reg)
+
+prom_status_file = "/srv/node-exporter/certmonger.prom"
+
+DBUS_DBUS_PROPERTIES_INTERFACE = "org.freedesktop.DBus.Properties"
+CERTMONGER_DBUS_SERVICE = "org.fedorahosted.certmonger"
+CERTMONGER_DBUS_CERTMONGER_OBJECT = "/org/fedorahosted/certmonger"
+CERTMONGER_DBUS_CERTMONGER_INTERFACE = "org.fedorahosted.certmonger"
+CERTMONGER_DBUS_REQUEST_INTERFACE = "org.fedorahosted.certmonger.request"
+CERTMONGER_DBUS_CA_INTERFACE = "org.fedorahosted.certmonger.ca"
+
+def main(argv):
+    bus = dbus.SystemBus()
+
+    certmonger = bus.get_object(CERTMONGER_DBUS_SERVICE, CERTMONGER_DBUS_CERTMONGER_OBJECT)
+
+    for request_obj in certmonger.get_requests(dbus_interface=CERTMONGER_DBUS_CERTMONGER_INTERFACE):
+        request = bus.get_object(CERTMONGER_DBUS_SERVICE, request_obj)
+        request_props = dbus.Interface(request, DBUS_DBUS_PROPERTIES_INTERFACE)
+        ca_obj = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "ca")
+        if ca_obj.startswith("/org/fedorahosted/certmonger/requests/"):
+            # Work around <https://issues.redhat.com/browse/RHEL-29246>
+            ca_obj = ca_obj.replace("/org/fedorahosted/certmonger/requests/", "/org/fedorahosted/certmonger/cas/")
+        ca = bus.get_object(CERTMONGER_DBUS_SERVICE, ca_obj)
+        ca_props = dbus.Interface(ca, DBUS_DBUS_PROPERTIES_INTERFACE)
+        labels = {
+            "nickname": request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "nickname"),
+            "ca": ca_props.Get(CERTMONGER_DBUS_CA_INTERFACE, "nickname"),
+            "storage_type":  request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "cert-storage"),
+        }
+        if labels["storage_type"] == "FILE":
+            labels["storage_location"] = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "cert-file")
+            labels["storage_nickname"] = ""
+            labels["storage_token"] = ""
+        elif labels["storage_type"] == "NSSDB":
+            labels["storage_location"] = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "cert-database")
+            labels["storage_nickname"] = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "cert-nickname")
+            labels["storage_token"] = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "cert-token")
+
+        metric_request_ca_error.labels(**labels).set(0 if request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "ca-error") is None else 1)
+        key_generated_date = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "key-generated-date")
+        if key_generated_date == 0:
+            # This date is not kept for some certificates. Don't know why.
+            logging.debug("key-generated-date for tracking request %s is 0; ignoring", labels["nickname"])
+        else:
+            metric_request_key_generated_date.labels(**labels).set(key_generated_date)
+        metric_request_key_issued_count.labels(**labels).set(request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "key-issued-count"))
+        metric_request_last_checked.labels(**labels).set(request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "last-checked"))
+        metric_request_not_valid_after.labels(**labels).set(request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "not-valid-after"))
+        metric_request_not_valid_before.labels(**labels).set(request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "not-valid-before"))
+        metric_request_stuck.labels(**labels).set(int(request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "stuck")))
+
+    write_to_textfile(prom_status_file, prom_reg)
+
+
+def excepthook(exc_type, exc_value, exc_traceback):
+    if exc_type is KeyboardInterrupt:
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    logger.critical("Unhandled exception!", exc_info=(exc_type, exc_value, exc_traceback))
+
+
+def configure_logging():
+    level = os.environ.get("CERTMONGER_EXPORTER_LOG_LEVEL", "DEBUG").upper()
+    if "INVOCATION_ID" in os.environ:
+        handlers = [JournalHandler(SYSLOG_IDENTIFIER="certmonger-exporter")]
+    else:
+        handlers = None
+    logging.basicConfig(
+        level=level,
+        handlers=handlers,
+        format="%(message)s",
+    )
+    logging.captureWarnings(True)
+
+
+if __name__ == '__main__':
+    configure_logging()
+    sys.excepthook = excepthook
+    sys.exit(main(sys.argv))
+
+# vim: ts=8 sts=4 sw=4 et
