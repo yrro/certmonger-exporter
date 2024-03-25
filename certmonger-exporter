@@ -26,6 +26,10 @@ CERTMONGER_DBUS_CERTMONGER_OBJECT = "/org/fedorahosted/certmonger"
 CERTMONGER_DBUS_CERTMONGER_INTERFACE = "org.fedorahosted.certmonger"
 CERTMONGER_DBUS_REQUEST_INTERFACE = "org.fedorahosted.certmonger.request"
 CERTMONGER_DBUS_CA_INTERFACE = "org.fedorahosted.certmonger.ca"
+SYSTEMD_DBUS_SERVICE = "org.freedesktop.systemd1"
+SYSTEMD_DBUS_MANAGER_OBJECT = "/org/freedesktop/systemd1"
+SYSTEMD_DBUS_MANAGER_INTERFACE = "org.freedesktop.systemd1.Manager"
+SYSTEMD_DBUS_UNIT_INTERFACE = "org.freedesktop.systemd1.Unit"
 
 
 class ChildDidNotRespond(Exception):
@@ -154,6 +158,22 @@ class CertmongerCollector:
         requests = pickle.loads(data)
         logger.debug("Read %s requests from parent", len(requests))
         yield from self.collect_requests(requests)
+
+        yield from self.collect_certmonger()
+
+
+    def collect_certmonger(self):
+        bus = dbus.SystemBus()
+
+        systemd_manager = bus.get_object(SYSTEMD_DBUS_SERVICE, SYSTEMD_DBUS_MANAGER_OBJECT)
+        unit_obj = systemd_manager.GetUnit("certmonger.service", dbus_interface=SYSTEMD_DBUS_MANAGER_INTERFACE)
+
+        unit = bus.get_object(SYSTEMD_DBUS_SERVICE, unit_obj)
+        unit_file_state = unit.Get(SYSTEMD_DBUS_UNIT_INTERFACE, "UnitFileState", dbus_interface=DBUS_DBUS_PROPERTIES_INTERFACE)
+
+        bus.close()
+
+        yield GaugeMetricFamily("certmonger_enabled", "1 if the certmonger service is enabled", value=1 if unit_file_state == "enabled" else 0)
 
 
     def collect_requests(self, requests):
