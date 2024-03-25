@@ -2,26 +2,23 @@
 
 import logging
 import os
+import pickle
+import pwd
+import signal
+import select
+import socket
+import threading
 import sys
 
 import dbus
-from prometheus_client import CollectorRegistry, Gauge, write_to_textfile
+#from prometheus_client import CollectorRegistry, Gauge, write_to_textfile
+from prometheus_client.core import GaugeMetricFamily
 from systemd.journal import JournalHandler
 
 
 logger = logging.getLogger('certmonger-exporter')
 
-prom_reg = CollectorRegistry()
-labels = ["nickname", "ca", "storage_type", "storage_location", "storage_nickname", "storage_token"]
-metric_request_ca_error = Gauge("certmonger_request_ca_error", "1 if the CA returned an error when certificate signing was requested", labels, registry=prom_reg)
-metric_request_key_generated_date = Gauge("certmonger_request_key_generated_date_seconds", "Timestamp the private key was generated", labels, registry=prom_reg)
-metric_request_key_issued_count = Gauge("certmonger_request_key_issued_count", "number of times a certificate was issued for the private key", labels, registry=prom_reg)
-metric_request_last_checked = Gauge("certmonger_request_last_checked_date_seconds", "?", labels, registry=prom_reg)
-metric_request_not_valid_after = Gauge("certmonger_request_not_valid_after_date_seconds", "Timestamp of certificate expiry", labels, registry=prom_reg)
-metric_request_not_valid_before = Gauge("certmonger_request_not_valid_before_date_seconds", "Timestamp after which certificate is valid", labels, registry=prom_reg)
-metric_request_stuck = Gauge("certmonger_request_stuck", "1 if request is stuck", labels, registry=prom_reg)
-
-prom_status_file = "/srv/node-exporter/certmonger.prom"
+labelnames = ["nickname", "ca", "storage_type", "storage_location", "storage_nickname", "storage_token"]
 
 DBUS_DBUS_PROPERTIES_INTERFACE = "org.freedesktop.DBus.Properties"
 CERTMONGER_DBUS_SERVICE = "org.fedorahosted.certmonger"
@@ -30,7 +27,167 @@ CERTMONGER_DBUS_CERTMONGER_INTERFACE = "org.fedorahosted.certmonger"
 CERTMONGER_DBUS_REQUEST_INTERFACE = "org.fedorahosted.certmonger.request"
 CERTMONGER_DBUS_CA_INTERFACE = "org.fedorahosted.certmonger.ca"
 
+
+class ChildDidNotRespond(Exception):
+    pass
+
+
 def main(argv):
+    parent_sock, child_sock = socket.socketpair()
+    pid = os.fork()
+    if pid == 0:
+        parent_sock.close()
+        return main_child(child_sock)
+    else:
+        child_sock.close()
+        return main_parent(pid, parent_sock)
+
+
+def main_parent(child_pid, parent_sock):
+    service_requests_from_child(parent_sock)
+
+    logger.debug("Terminating child...")
+    os.kill(child_pid, signal.SIGTERM)
+    def alarm(signum, frame):
+        raise ChildDidNotRespond()
+    signal.signal(signal.SIGALRM, alarm)
+    signal.alarm(10)
+    try:
+        pid, status = os.waitpid(child_pid, os.WNOHANG)
+    except ChildDidNotRespond:
+        logger.warning("Child did not respond to SIGTERM; sending SIGKILL")
+        os.kill(child_pid, signal.SIGKILL)
+    else:
+        signal.alarm(0)
+        if pid == 0:
+            logger.warning("Child process %r does not exist!?", child_pid)
+
+    logger.info("Child exit status: %r", status)
+    return 0
+
+
+def main_child(child_sock):
+    os.setsid()
+    #os.setpgid(0, 0)
+
+    pwent = pwd.getpwnam("nobody")
+    os.setgid(pwent.pw_gid)
+    os.setuid(pwent.pw_uid)
+
+    die_event = threading.Event()
+
+    from prometheus_client.core import REGISTRY
+    REGISTRY.register(CertmongerCollector(child_sock, die_event))
+
+    # EPEL 8 has an older prometheus_client which don't return the thread for
+    # us to join on, so instead we re-implement it here.
+    def start_httpd_server(port, addr='', registry=REGISTRY):
+        """Starts a WSGI server for prometheus metrics as a daemon thread."""
+        from prometheus_client.exposition import make_wsgi_app, make_server, ThreadingWSGIServer, _SilentHandler, make_server
+        app = make_wsgi_app(registry)
+        httpd = make_server(addr, port, app, ThreadingWSGIServer, handler_class=_SilentHandler)
+        t = threading.Thread(target=httpd.serve_forever)
+        t.daemon = True
+        t.start()
+        return httpd, t
+    server, thread = start_httpd_server(9630)
+
+    logger.info("Child waiting...")
+    die_event.wait()
+
+    server.shutdown()
+    thread.join()
+    return 0
+
+
+def service_requests_from_child(parent_sock):
+    while True:
+        rlist, _, _ = select.select([parent_sock], [], [])
+
+        if parent_sock in rlist:
+            data = parent_sock.recv(32)
+            if data == b'':
+                logger.error("Child closed socket")
+                break
+            elif data == b'scrape request':
+                logger.debug("Parent scraping...")
+                data = pickle.dumps(list(parent_scrape()), protocol=pickle.HIGHEST_PROTOCOL)
+                parent_sock.sendall(data)
+                logger.debug("Parent sent %s bytes to child", len(data))
+            else:
+                logger.error("Unknown message from child: %r", data)
+                break
+        else:
+            raise Exception("select returned unexpected result")
+
+
+class CertmongerCollector:
+
+    def __init__(self, sock, die_event):
+        self.__sock = sock
+        self.__die_event = die_event
+
+
+    def collect(self):
+        logger.debug("Child collecting")
+        self.__sock.sendall(b'scrape request')
+        data = b''
+        while True:
+            rlist, _, _ = select.select([self.__sock], [], [])  # TODO: timeout?
+            if self.__sock in rlist:
+                new_data = self.__sock.recv(1024)
+                data += new_data
+                if len(new_data) == 1024:
+                    continue
+                elif len(new_data) == 0:
+                    # XXX If parent dies, we won't get here until the next
+                    # scrape, meanwhile the parent will have restarted, and
+                    # _its_ new child will be failing to bind...
+                    logger.info("Parent closed socket")
+                    self.__die_event.set()
+                    return
+                else:
+                    break
+            else:
+                raise Exception("select returned unexpected result")
+
+        requests = pickle.loads(data)
+        logger.debug("Read %s requests from parent", len(requests))
+        yield from self.collect_requests(requests)
+
+
+    def collect_requests(self, requests):
+        mf_ca_error = GaugeMetricFamily("certmonger_request_ca_error", "1 if the CA returned an error when certificate signing was requested", labels=labelnames)
+        mf_key_generated_date = GaugeMetricFamily("certmonger_request_key_generated_date_seconds", "Timestamp the private key was generated", labels=labelnames)
+        mf_key_issued_count = GaugeMetricFamily("certmonger_request_key_issued_count", "number of times a certificate was issued for the private key", labels=labelnames)
+        mf_last_checked = GaugeMetricFamily("certmonger_request_last_checked_date_seconds", "?", labels=labelnames)
+        mf_not_valid_after = GaugeMetricFamily("certmonger_request_not_valid_after_date_seconds", "Timestamp of certificate expiry", labels=labelnames)
+        mf_not_valid_before = GaugeMetricFamily("certmonger_request_not_valid_before_date_seconds", "Timestamp after which certificate is valid", labels=labelnames)
+        mf_stuck = GaugeMetricFamily("certmonger_request_stuck", "1 if request is stuck", labels=labelnames)
+
+        for labels, properties in requests:
+            labelvalues = [labels[labelname] for labelname in labelnames]
+
+            mf_ca_error.add_metric(labelvalues, 1 if properties["ca-error"] else 0)
+            if properties["key-generated-date"] > 0:
+                # This date is not kept for some certificates. Don't know why.
+                mf_key_generated_date.add_metric(labelvalues, properties["key-generated-date"])
+            mf_key_issued_count.add_metric(labelvalues, properties["key-issued-count"])
+            mf_last_checked.add_metric(labelvalues, properties["last-checked"])
+            mf_not_valid_after.add_metric(labelvalues, properties["not-valid-after"])
+            mf_not_valid_before.add_metric(labelvalues, properties["not-valid-before"])
+            mf_stuck.add_metric(labelvalues, properties["stuck"])
+
+        yield mf_ca_error
+        yield mf_key_generated_date
+        yield mf_key_issued_count
+        yield mf_last_checked
+        yield mf_not_valid_after
+        yield mf_not_valid_before
+        yield mf_stuck
+
+
+def parent_scrape():
     bus = dbus.SystemBus()
 
     certmonger = bus.get_object(CERTMONGER_DBUS_SERVICE, CERTMONGER_DBUS_CERTMONGER_OBJECT)
@@ -58,20 +215,15 @@ def main(argv):
             labels["storage_nickname"] = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "cert-nickname")
             labels["storage_token"] = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "cert-token")
 
-        metric_request_ca_error.labels(**labels).set(0 if request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "ca-error") is None else 1)
-        key_generated_date = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "key-generated-date")
-        if key_generated_date == 0:
-            # This date is not kept for some certificates. Don't know why.
-            logging.debug("key-generated-date for tracking request %s is 0; ignoring", labels["nickname"])
-        else:
-            metric_request_key_generated_date.labels(**labels).set(key_generated_date)
-        metric_request_key_issued_count.labels(**labels).set(request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "key-issued-count"))
-        metric_request_last_checked.labels(**labels).set(request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "last-checked"))
-        metric_request_not_valid_after.labels(**labels).set(request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "not-valid-after"))
-        metric_request_not_valid_before.labels(**labels).set(request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "not-valid-before"))
-        metric_request_stuck.labels(**labels).set(int(request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "stuck")))
+        properties = {name: request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, name) for name in [
+                        "ca-error", "key-issued-count", "ca-error",
+                        "key-generated-date", "last-checked", "not-valid-after",
+                        "not-valid-before", "stuck"
+                    ]}
 
-    write_to_textfile(prom_status_file, prom_reg)
+        yield labels, properties
+
+    bus.close()
 
 
 def excepthook(exc_type, exc_value, exc_traceback):
