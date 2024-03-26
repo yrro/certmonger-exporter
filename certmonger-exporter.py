@@ -96,8 +96,12 @@ def main_child(child_sock):
     signal.signal(signal.SIGTERM, sigterm)
 
     pwent = pwd.getpwnam(os.environ.get("CERTMONGER_EXPORTER_USER", "nobody"))
-    os.setgid(pwent.pw_gid)
-    os.setuid(pwent.pw_uid)
+    try:
+        os.setgid(pwent.pw_gid)
+        os.setuid(pwent.pw_uid)
+    except PermissionError:
+        logging.error("certmonger-exporter needs to be launched as root. The network-facing component will drop privileges by switching to the user %r.", pwent.pw_name)
+        return 1
 
     main_sock, server_sock = socket.socketpair()
 
