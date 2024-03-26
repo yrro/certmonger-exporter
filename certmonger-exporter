@@ -95,14 +95,14 @@ def main_child(child_sock):
         os.write(xw, b'\0')
     signal.signal(signal.SIGTERM, sigterm)
 
-    pwent = pwd.getpwnam("nobody")
+    pwent = pwd.getpwnam(os.environ.get("CERTMONGER_EXPORTER_USER", "nobody"))
     os.setgid(pwent.pw_gid)
     os.setuid(pwent.pw_uid)
 
     main_sock, server_sock = socket.socketpair()
 
     REGISTRY.register(CertmongerCollector(server_sock))
-    server, thread = start_httpd_server(9630)
+    server, thread = start_httpd_server(int(os.environ.get("CERTMONGER_EXPORTER_PORT", "9630")))
 
     try:
         child_sock.sendall(b'ready')
