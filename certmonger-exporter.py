@@ -74,7 +74,7 @@ def main_parent(child_pid, parent_sock):
     logger.debug("Waiting for child to be ready")
     data = parent_sock.recv(32)
     if data == b'':
-        logger.error("Child closed socket before initializing")
+        logger.error("Child failed to initialize")
         return 1
     elif data == b'ready':
         logger.debug("Child is ready")
