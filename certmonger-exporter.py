@@ -43,8 +43,26 @@ def main(argv):
         parent_sock.close()
         return main_child(child_sock)
     else:
-        child_sock.close()
-        return main_parent(pid, parent_sock)
+        try:
+            child_sock.close()
+            return main_parent(pid, parent_sock)
+        finally:
+            def alarm(signum, frame):
+                raise ChildDidNotRespond()
+            signal.signal(signal.SIGALRM, alarm)
+
+            signal.alarm(5)
+            try:
+                pid_, status = os.waitpid(pid, 0)
+            except ChildDidNotRespond:
+                logger.warning("Child did not exit itself, sending SIGKILL")
+                os.kill(pid_, signal.SIGKILL)
+            else:
+                signal.alarm(0)
+                if pid_ == 0:
+                    logger.warning("Child process %r does not exist!?", pid)
+                else:
+                    logger.info("Child exit status: %r", status)
 
 
 def main_parent(child_pid, parent_sock):
@@ -53,47 +71,23 @@ def main_parent(child_pid, parent_sock):
         os.write(xw, b'\0')
     signal.signal(signal.SIGTERM, sigterm)
 
-    try:
-        logger.debug("Waiting for child to be ready")
-        data = parent_sock.recv(32)
-        if data == b'':
-            logger.error("Child closed socket before initializing")
-            return 1
-        elif data == b'ready':
-            logger.debug("Child is ready")
-            notify("READY=1")
-            return service_requests_from_child(xr, parent_sock)
-        else:
-            logger.error("Unexpected message from child: %r", data)
-            return 1
-    finally:
-        logger.debug("Terminating child...")
-        os.kill(child_pid, signal.SIGTERM)
-        def alarm(signum, frame):
-            raise ChildDidNotRespond()
-        signal.signal(signal.SIGALRM, alarm)
-        signal.alarm(5)
-        try:
-            pid, status = os.waitpid(child_pid, 0)
-        except ChildDidNotRespond:
-            logger.warning("Child did not respond to SIGTERM; sending SIGKILL")
-            os.kill(child_pid, signal.SIGKILL)
-        else:
-            signal.alarm(0)
-            if pid == 0:
-                logger.warning("Child process %r does not exist!?", child_pid)
-            else:
-                logger.info("Child exit status: %r", status)
+    logger.debug("Waiting for child to be ready")
+    data = parent_sock.recv(32)
+    if data == b'':
+        logger.error("Child closed socket before initializing")
+        return 1
+    elif data == b'ready':
+        logger.debug("Child is ready")
+        notify("READY=1")
+        return service_requests_from_child(xr, parent_sock)
+    else:
+        logger.error("Unexpected message from child: %r", data)
+        return 1
 
 
 def main_child(child_sock):
     # We don't want to recieve SIGINT from the developer's terminal.
     #os.setsid()
-
-    xr, xw = os.pipe()
-    def sigterm(signum, frame):
-        os.write(xw, b'\0')
-    signal.signal(signal.SIGTERM, sigterm)
 
     pwent = pwd.getpwnam(os.environ.get("CERTMONGER_EXPORTER_USER", "nobody"))
     try:
@@ -112,16 +106,12 @@ def main_child(child_sock):
         child_sock.sendall(b'ready')
         while True:
             logger.debug("Child waiting...")
-            rlist, _, _ = select.select([xr, child_sock, main_sock], [], [])
-
-            if xr in rlist:
-                logger.debug("Child exiting")
-                return 0
+            rlist, _, _ = select.select([child_sock, main_sock], [], [])
 
             if child_sock in rlist:
                 data = child_sock.recv(32)
                 if len(data) == 0:
-                    logger.info("Parent closed socket!")
+                    logger.debug("Parent closed socket")
                     return 0
                 else:
                     logger.error("Unexpected message from parent: %r", data)
@@ -179,6 +169,7 @@ def service_requests_from_child(xr, parent_sock):
 
         if xr in rlist:
             logger.debug("Bye")
+            parent_sock.shutdown(socket.SHUT_RDWR)
             return 0
 
         if parent_sock in rlist:
