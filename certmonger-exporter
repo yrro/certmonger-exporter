@@ -18,8 +18,6 @@ from systemd.daemon import notify
 
 logger = logging.getLogger('certmonger-exporter')
 
-labelnames = ["nickname", "ca", "storage_type", "storage_location", "storage_nickname", "storage_token"]
-
 DBUS_DBUS_PROPERTIES_INTERFACE = "org.freedesktop.DBus.Properties"
 CERTMONGER_DBUS_SERVICE = "org.fedorahosted.certmonger"
 CERTMONGER_DBUS_CERTMONGER_OBJECT = "/org/fedorahosted/certmonger"
@@ -226,6 +224,8 @@ class CertmongerCollector:
 
 
     def collect_requests(self, requests):
+        labelnames = ["nickname", "ca", "storage_type", "storage_location", "storage_nickname", "storage_token"]
+
         mf_ca_error = GaugeMetricFamily("certmonger_request_ca_error", "1 if the CA returned an error when certificate signing was requested", labels=labelnames)
         mf_key_generated_date = GaugeMetricFamily("certmonger_request_key_generated_date_seconds", "Timestamp the private key was generated", labels=labelnames)
         mf_key_issued_count = GaugeMetricFamily("certmonger_request_key_issued_count", "number of times a certificate was issued for the private key", labels=labelnames)
