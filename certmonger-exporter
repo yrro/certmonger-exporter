@@ -90,6 +90,11 @@ def main_child(child_sock):
     # We don't want to recieve SIGINT from the developer's terminal.
     #os.setsid()
 
+    xr, xw = os.pipe()
+    def sigterm(signum, frame):
+        os.write(xw, b'\0')
+    signal.signal(signal.SIGTERM, sigterm)
+
     pwent = pwd.getpwnam("nobody")
     os.setgid(pwent.pw_gid)
     os.setuid(pwent.pw_uid)
@@ -103,7 +108,11 @@ def main_child(child_sock):
         child_sock.sendall(b'ready')
         while True:
             logger.debug("Child waiting...")
-            rlist, _, _ = select.select([child_sock, main_sock], [], [])
+            rlist, _, _ = select.select([xr, child_sock, main_sock], [], [])
+
+            if xr in rlist:
+                logger.debug("Child exiting")
+                return 0
 
             if child_sock in rlist:
                 data = child_sock.recv(32)
