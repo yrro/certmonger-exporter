@@ -327,7 +327,7 @@ def excepthook(exc_type, exc_value, exc_traceback):
 
 
 def configure_logging():
-    level = os.environ.get("CERTMONGER_EXPORTER_LOG_LEVEL", "DEBUG").upper()
+    level = os.environ.get("CERTMONGER_EXPORTER_LOG_LEVEL", "info").upper()
     if "INVOCATION_ID" in os.environ:
         handlers = [JournalHandler(SYSLOG_IDENTIFIER="certmonger-exporter")]
     else:
