@@ -11,8 +11,9 @@ import threading
 import sys
 
 import dbus
-from prometheus_client.core import GaugeMetricFamily
+from prometheus_client.core import GaugeMetricFamily, REGISTRY
 from systemd.journal import JournalHandler
+from systemd.daemon import notify
 
 
 logger = logging.getLogger('certmonger-exporter')
@@ -29,6 +30,8 @@ SYSTEMD_DBUS_SERVICE = "org.freedesktop.systemd1"
 SYSTEMD_DBUS_MANAGER_OBJECT = "/org/freedesktop/systemd1"
 SYSTEMD_DBUS_MANAGER_INTERFACE = "org.freedesktop.systemd1.Manager"
 SYSTEMD_DBUS_UNIT_INTERFACE = "org.freedesktop.systemd1.Unit"
+
+SOCKET_BUFFER_LEN = 512
 
 
 class ChildDidNotRespond(Exception):
@@ -48,20 +51,17 @@ def main(argv):
 
 def main_parent(child_pid, parent_sock):
     try:
-        rlist, _, _ = select.select([parent_sock], [], [], 2)
-        if parent_sock in rlist:
-            data = parent_sock.recv(32)
-            if data == b'':
-                logger.error("Child closed socket before initializing")
-                return 1
-            elif data == b'ready':
-                service_requests_from_child(parent_sock)
-                return 0
-            else:
-                logger.error("Unexpected message from child: %r", data)
-                return 1
+        logger.debug("Waiting for child to be ready")
+        data = parent_sock.recv(32)
+        if data == b'':
+            logger.error("Child closed socket before initializing")
+            return 1
+        elif data == b'ready':
+            logger.debug("Child is ready")
+            notify("READY=1")
+            return service_requests_from_child(parent_sock)
         else:
-            logger.error("Timed out waiting for child to initialize")
+            logger.error("Unexpected message from child: %r", data)
             return 1
     finally:
         logger.debug("Terminating child...")
@@ -69,9 +69,9 @@ def main_parent(child_pid, parent_sock):
         def alarm(signum, frame):
             raise ChildDidNotRespond()
         signal.signal(signal.SIGALRM, alarm)
-        signal.alarm(10)
+        signal.alarm(5)
         try:
-            pid, status = os.waitpid(child_pid, os.WNOHANG)
+            pid, status = os.waitpid(child_pid, 0)
         except ChildDidNotRespond:
             logger.warning("Child did not respond to SIGTERM; sending SIGKILL")
             os.kill(child_pid, signal.SIGKILL)
@@ -79,102 +79,124 @@ def main_parent(child_pid, parent_sock):
             signal.alarm(0)
             if pid == 0:
                 logger.warning("Child process %r does not exist!?", child_pid)
-            logger.info("Child exit status: %r", status)
+            else:
+                logger.info("Child exit status: %r", status)
     return 0
 
 
 def main_child(child_sock):
-    os.setsid()
-    #os.setpgid(0, 0)
+    # We don't want to recieve SIGINT from the developer's terminal.
+    #os.setsid()
 
     pwent = pwd.getpwnam("nobody")
     os.setgid(pwent.pw_gid)
     os.setuid(pwent.pw_uid)
 
-    die_event = threading.Event()
+    main_sock, server_sock = socket.socketpair()
 
-    from prometheus_client.core import REGISTRY
-    REGISTRY.register(CertmongerCollector(child_sock, die_event))
-
-    # EPEL 8 has an older prometheus_client which don't return the thread for
-    # us to join on, so instead we re-implement it here.
-    def start_httpd_server(port, addr='', registry=REGISTRY):
-        """Starts a WSGI server for prometheus metrics as a daemon thread."""
-        from prometheus_client.exposition import make_wsgi_app, make_server, ThreadingWSGIServer, _SilentHandler, make_server
-        app = make_wsgi_app(registry)
-        httpd = make_server(addr, port, app, ThreadingWSGIServer, handler_class=_SilentHandler)
-        t = threading.Thread(target=httpd.serve_forever)
-        t.daemon = True
-        t.start()
-        return httpd, t
+    REGISTRY.register(CertmongerCollector(server_sock))
     server, thread = start_httpd_server(9630)
 
-    child_sock.sendall(b'ready')
-    logger.info("Child waiting...")
-    # XXX SIGTERM
-    die_event.wait()
+    try:
+        child_sock.sendall(b'ready')
+        while True:
+            logger.debug("Child waiting...")
+            rlist, _, _ = select.select([child_sock, main_sock], [], [])
 
-    logger.info("Exiting")
-    server.shutdown()
-    thread.join()
-    return 0
+            if child_sock in rlist:
+                data = child_sock.recv(32)
+                if len(data) == 0:
+                    logger.info("Parent closed socket!")
+                    return 0
+                else:
+                    logger.error("Unexpected message from parent: %r", data)
+                    return 1
+
+            if main_sock in rlist:
+                data = main_sock.recv(32)
+                if len(data) == 0:
+                    logger.error("Server closed socket!")
+                    return 1
+                elif data == b"scrape-plz":
+                    main_sock.sendall(child_scrape(child_sock))
+                else:
+                    logger.error("Unexpected message from server: %r", data)
+                    return 1
+
+    finally:
+        server.shutdown()
+        thread.join()
+
+
+def child_scrape(child_sock):
+    logger.debug("Child requesting scrape from parent")
+    child_sock.sendall(b"scrape-plz")
+    data = b""
+    while True:
+        new_data = child_sock.recv(SOCKET_BUFFER_LEN)
+        data += new_data
+        if len(new_data) == SOCKET_BUFFER_LEN:
+            continue
+        elif len(new_data) == 0:
+            raise Exception("Parent closed socket")
+        else:
+            break
+    logger.debug("Child read %s bytes from parent", len(data))
+    return data
+
+
+# EPEL 8 has an older prometheus_client which don't return the thread for
+# us to join on, so instead we re-implement it here.
+def start_httpd_server(port, addr='', registry=REGISTRY):
+    """Starts a WSGI server for prometheus metrics as a daemon thread."""
+    from prometheus_client.exposition import make_wsgi_app, make_server, ThreadingWSGIServer, _SilentHandler, make_server
+    app = make_wsgi_app(registry)
+    httpd = make_server(addr, port, app, ThreadingWSGIServer, handler_class=_SilentHandler)
+    t = threading.Thread(target=httpd.serve_forever)
+    t.daemon = True
+    t.start()
+    return httpd, t
 
 
 def service_requests_from_child(parent_sock):
     while True:
-        rlist, _, _ = select.select([parent_sock], [], [])
-
-        if parent_sock in rlist:
-            data = parent_sock.recv(32)
-            if data == b'':
-                logger.error("Child closed socket")
-                break
-            elif data == b'scrape-plz':
-                logger.debug("Parent scraping...")
-                data = pickle.dumps(list(parent_scrape()), protocol=pickle.HIGHEST_PROTOCOL)
-                parent_sock.sendall(data)
-                logger.debug("Parent sent %s bytes to child", len(data))
-            else:
-                logger.error("Unknown message from child: %r", data)
-                break
+        data = parent_sock.recv(32)
+        if data == b'':
+            logger.error("Child closed socket")
+            return 1
+        elif data == b'scrape-plz':
+            logger.debug("Parent scraping...")
+            data = pickle.dumps(list(parent_scrape()), protocol=pickle.HIGHEST_PROTOCOL)
+            parent_sock.sendall(data)
+            logger.debug("Parent sent %s bytes to child", len(data))
         else:
-            raise Exception("select returned unexpected result")
+            logger.error("Unknown message from child: %r", data)
+            return 1
 
 
 class CertmongerCollector:
 
-    def __init__(self, sock, die_event):
+    def __init__(self, sock):
         self.__sock = sock
-        self.__die_event = die_event
 
 
     def collect(self):
-        logger.debug("Child collecting")
-        try:
-            self.__sock.sendall(b'scrape-plz')
-        except BrokenPipeError:
-            logger.error("Parent closed socket; bailing out!")
-            self.__die_event.set()
-            return
+        logger.debug("Server collecting")
+        self.__sock.sendall(b'scrape-plz')
         data = b''
         while True:
-            rlist, _, _ = select.select([self.__sock], [], [])  # TODO: timeout?
-            if self.__sock in rlist:
-                new_data = self.__sock.recv(1024)
-                data += new_data
-                if len(new_data) == 1024:
-                    continue
-                elif len(new_data) == 0:
-                    logger.info("Parent closed socket without repling")
-                    self.__die_event.set()
-                    return
-                else:
-                    break
+            new_data = self.__sock.recv(SOCKET_BUFFER_LEN)
+            data += new_data
+            if len(new_data) == SOCKET_BUFFER_LEN:
+                continue
+            elif len(new_data) == 0:
+                # main thread has closed the socket, should never happen!
+                return
             else:
-                raise Exception("select returned unexpected result")
+                break
 
         requests = pickle.loads(data)
-        logger.debug("Read %s requests from parent", len(requests))
+        logger.debug("Server unpickled %s requests from parent", len(requests))
         yield from self.collect_requests(requests)
         yield from self.collect_certmonger()
 
