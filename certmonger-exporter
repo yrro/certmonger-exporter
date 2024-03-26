@@ -47,25 +47,39 @@ def main(argv):
 
 
 def main_parent(child_pid, parent_sock):
-    service_requests_from_child(parent_sock)
-
-    logger.debug("Terminating child...")
-    os.kill(child_pid, signal.SIGTERM)
-    def alarm(signum, frame):
-        raise ChildDidNotRespond()
-    signal.signal(signal.SIGALRM, alarm)
-    signal.alarm(10)
     try:
-        pid, status = os.waitpid(child_pid, os.WNOHANG)
-    except ChildDidNotRespond:
-        logger.warning("Child did not respond to SIGTERM; sending SIGKILL")
-        os.kill(child_pid, signal.SIGKILL)
-    else:
-        signal.alarm(0)
-        if pid == 0:
-            logger.warning("Child process %r does not exist!?", child_pid)
-
-    logger.info("Child exit status: %r", status)
+        rlist, _, _ = select.select([parent_sock], [], [], 2)
+        if parent_sock in rlist:
+            data = parent_sock.recv(32)
+            if data == b'':
+                logger.error("Child closed socket before initializing")
+                return 1
+            elif data == b'ready':
+                service_requests_from_child(parent_sock)
+                return 0
+            else:
+                logger.error("Unexpected message from child: %r", data)
+                return 1
+        else:
+            logger.error("Timed out waiting for child to initialize")
+            return 1
+    finally:
+        logger.debug("Terminating child...")
+        os.kill(child_pid, signal.SIGTERM)
+        def alarm(signum, frame):
+            raise ChildDidNotRespond()
+        signal.signal(signal.SIGALRM, alarm)
+        signal.alarm(10)
+        try:
+            pid, status = os.waitpid(child_pid, os.WNOHANG)
+        except ChildDidNotRespond:
+            logger.warning("Child did not respond to SIGTERM; sending SIGKILL")
+            os.kill(child_pid, signal.SIGKILL)
+        else:
+            signal.alarm(0)
+            if pid == 0:
+                logger.warning("Child process %r does not exist!?", child_pid)
+            logger.info("Child exit status: %r", status)
     return 0
 
 
@@ -95,9 +109,12 @@ def main_child(child_sock):
         return httpd, t
     server, thread = start_httpd_server(9630)
 
+    child_sock.sendall(b'ready')
     logger.info("Child waiting...")
+    # XXX SIGTERM
     die_event.wait()
 
+    logger.info("Exiting")
     server.shutdown()
     thread.join()
     return 0
@@ -112,7 +129,7 @@ def service_requests_from_child(parent_sock):
             if data == b'':
                 logger.error("Child closed socket")
                 break
-            elif data == b'scrape request':
+            elif data == b'scrape-plz':
                 logger.debug("Parent scraping...")
                 data = pickle.dumps(list(parent_scrape()), protocol=pickle.HIGHEST_PROTOCOL)
                 parent_sock.sendall(data)
@@ -133,7 +150,12 @@ class CertmongerCollector:
 
     def collect(self):
         logger.debug("Child collecting")
-        self.__sock.sendall(b'scrape request')
+        try:
+            self.__sock.sendall(b'scrape-plz')
+        except BrokenPipeError:
+            logger.error("Parent closed socket; bailing out!")
+            self.__die_event.set()
+            return
         data = b''
         while True:
             rlist, _, _ = select.select([self.__sock], [], [])  # TODO: timeout?
@@ -143,10 +165,7 @@ class CertmongerCollector:
                 if len(new_data) == 1024:
                     continue
                 elif len(new_data) == 0:
-                    # XXX If parent dies, we won't get here until the next
-                    # scrape, meanwhile the parent will have restarted, and
-                    # _its_ new child will be failing to bind...
-                    logger.info("Parent closed socket")
+                    logger.info("Parent closed socket without repling")
                     self.__die_event.set()
                     return
                 else:
@@ -157,7 +176,16 @@ class CertmongerCollector:
         requests = pickle.loads(data)
         logger.debug("Read %s requests from parent", len(requests))
         yield from self.collect_requests(requests)
+        yield from self.collect_certmonger()
 
+
+    def describe(self):
+        '''
+        If this method is present, the registry won't call collect during
+        registration of the collector (which is problematic because it happens
+        before we've sent the "ready" message to the parent.
+        '''
+        yield from self.collect_requests([])
         yield from self.collect_certmonger()
 
 
