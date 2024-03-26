@@ -169,6 +169,7 @@ def service_requests_from_child(xr, parent_sock):
 
         if xr in rlist:
             logger.debug("Bye")
+            notify("STOPPING=1")
             parent_sock.shutdown(socket.SHUT_RDWR)
             return 0
 
