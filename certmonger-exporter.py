@@ -56,7 +56,7 @@ def main(argv):
                 pid_, status = os.waitpid(pid, 0)
             except ChildDidNotRespond:
                 logger.warning("Child did not exit itself, sending SIGKILL")
-                os.kill(pid_, signal.SIGKILL)
+                os.kill(pid, signal.SIGKILL)
             else:
                 signal.alarm(0)
                 if pid_ == 0:
