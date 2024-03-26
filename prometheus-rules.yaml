@@ -1,0 +1,60 @@
+groups:
+- name: certmonger
+  rules:
+  - alert: CertmongerDisabled
+    expr: certmonger_enabled != 1
+    annotations:
+      summary: Certmonger is disabled
+      description: |
+        The certmonger.service unit is disabled. It may be running at the moment, but it won't be started on boot.
+        Enable it with 'systemctl enable certmonger.service'.
+    labels:
+      severity: warning
+  - alert: CertmongerRequestStuck
+    expr: certmonger_request_stuck != 0
+    annotations:
+      summary: Certificate tracking request stuck
+      description: |
+        The certificate tracking request {{ $labels.nickname }} is stuck.
+        It will not be possible to renew the certificate before it expires.
+        View details with 'certmonger list -i {{ $labels.nickname }}'.
+        View certmonger logs with 'journalctl -u certmonger'.
+  - alert: CertmongerRequestExpiryWithin7Days
+    expr: (certmonger_request_not_valid_after_date_seconds - time()) < 7 * 86400
+    annotations:
+      summary: Certificate expires in {{ $value | humanizeDuration }}
+      description: |
+        The certificate has not been renewed.
+        View details with 'certmonger list -i {{ $labels.nickname }}'.
+        View certmonger logs with 'journalctl -u certmonger'.
+  - alert: CertmongerRequestNotCheckedRecently
+    expr: time() - certmonger_request_last_checked_date_seconds > 86400
+    annotations:
+      summary: Certificate tracking request was last checked {{ $value | humanizeDuration }} ago
+      description: |
+        View details with 'certmonger list -i {{ $labels.nickname }}'.
+        View certmonger logs with 'journalctl -u certmonger'.
+  - alert: CertmongerKeyReused
+    expr: certmonger_request_key_issued_count > 1
+    annotations:
+      summary: Private key has been used {{ $value }} times
+      description: |
+        View details with 'certmonger list -i {{ $labels.nickname }}'.
+        Ensure max_key_use_count is set to 1 in /etc/certmonger/certmonger.conf.
+  - alert: CertmongerKeyAge
+    expr: (time() - certmonger_request_key_generated_date_seconds) > 2 * 52 * 7 * 86400
+    annotations:
+      summary: Private key is {{ $value | humanizeDuration }} old
+      description: |
+        View details with 'certmonger list -i {{ $labels.nickname }}'.
+        Ensure that max_key_lifetime is configured in /etc/certmonger/certmonger.conf.
+  - alert: CertmongerRequestCAError
+    expr: certmonger_request_ca_error != 0
+    annotations:
+      summary: CA error for tracking request {{ $labels.nickname }}
+      description: |
+        Certmonger requested a certificate from the "{{ $labels.ca }}" certificate authority, which returned an error.
+        View details with 'certmonger list -i {{ $labels.nickname }}'.
+        View certmonger logs with 'journalctl -u certmonger'.
+...
+# vim: ts=8 sts=2 sw=2 et

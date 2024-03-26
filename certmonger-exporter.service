@@ -1,0 +1,9 @@
+[Service]
+Type=notify
+ExecStart=/usr/local/libexec/certmonger-exporter.py
+Environment=PYTHONFAULTHANDLER=1
+Restart=always
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
