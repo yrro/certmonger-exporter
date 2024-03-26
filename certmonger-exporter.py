@@ -244,7 +244,7 @@ class CertmongerCollector:
         mf_ca_error = GaugeMetricFamily("certmonger_request_ca_error", "1 if the CA returned an error when certificate signing was requested", labels=labelnames)
         mf_key_generated_date = GaugeMetricFamily("certmonger_request_key_generated_date_seconds", "Timestamp the private key was generated", labels=labelnames)
         mf_key_issued_count = GaugeMetricFamily("certmonger_request_key_issued_count", "number of times a certificate was issued for the private key", labels=labelnames)
-        mf_last_checked = GaugeMetricFamily("certmonger_request_last_checked_date_seconds", "?", labels=labelnames)
+        mf_last_checked = GaugeMetricFamily("certmonger_request_last_checked_date_seconds", "Timestamp of last check for expiration", labels=labelnames)
         mf_not_valid_after = GaugeMetricFamily("certmonger_request_not_valid_after_date_seconds", "Timestamp of certificate expiry", labels=labelnames)
         mf_not_valid_before = GaugeMetricFamily("certmonger_request_not_valid_before_date_seconds", "Timestamp after which certificate is valid", labels=labelnames)
         mf_stuck = GaugeMetricFamily("certmonger_request_stuck", "1 if request is stuck", labels=labelnames)
