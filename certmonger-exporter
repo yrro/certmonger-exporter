@@ -48,6 +48,11 @@ def main(argv):
 
 
 def main_parent(child_pid, parent_sock):
+    xr, xw = os.pipe()
+    def sigterm(signum, frame):
+        os.write(xw, b'\0')
+    signal.signal(signal.SIGTERM, sigterm)
+
     try:
         logger.debug("Waiting for child to be ready")
         data = parent_sock.recv(32)
@@ -57,7 +62,7 @@ def main_parent(child_pid, parent_sock):
         elif data == b'ready':
             logger.debug("Child is ready")
             notify("READY=1")
-            return service_requests_from_child(parent_sock)
+            return service_requests_from_child(xr, parent_sock)
         else:
             logger.error("Unexpected message from child: %r", data)
             return 1
@@ -155,20 +160,27 @@ def start_httpd_server(port, addr='', registry=REGISTRY):
     return httpd, t
 
 
-def service_requests_from_child(parent_sock):
+def service_requests_from_child(xr, parent_sock):
     while True:
-        data = parent_sock.recv(32)
-        if data == b'':
-            logger.error("Child closed socket")
-            return 1
-        elif data == b'scrape-plz':
-            logger.debug("Parent scraping...")
-            data = pickle.dumps(list(parent_scrape()), protocol=pickle.HIGHEST_PROTOCOL)
-            parent_sock.sendall(data)
-            logger.debug("Parent sent %s bytes to child", len(data))
-        else:
-            logger.error("Unknown message from child: %r", data)
-            return 1
+        rlist, _, _ = select.select([xr, parent_sock], [], [])
+
+        if xr in rlist:
+            logger.debug("Bye")
+            return 0
+
+        if parent_sock in rlist:
+            data = parent_sock.recv(32)
+            if data == b'':
+                logger.error("Child closed socket")
+                return 1
+            elif data == b'scrape-plz':
+                logger.debug("Parent scraping...")
+                data = pickle.dumps(list(parent_scrape()), protocol=pickle.HIGHEST_PROTOCOL)
+                parent_sock.sendall(data)
+                logger.debug("Parent sent %s bytes to child", len(data))
+            else:
+                logger.error("Unknown message from child: %r", data)
+                return 1
 
 
 class CertmongerCollector:
