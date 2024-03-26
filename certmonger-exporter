@@ -79,7 +79,6 @@ def main_parent(child_pid, parent_sock):
                 logger.warning("Child process %r does not exist!?", child_pid)
             else:
                 logger.info("Child exit status: %r", status)
-    return 0
 
 
 def main_child(child_sock):
