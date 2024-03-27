@@ -1,3 +1,5 @@
+.DEFAULT_GOAL := run
+
 certmonger-exporter.pyz: src/certmonger_exporter/*.py
 	python3 -m zipapp -o certmonger-exporter.pyz src
 
@@ -8,4 +10,4 @@ install: certmonger-exporter.pyz
 
 .PHONY: run
 run:
-	cd src && sudo python3 -m certmonger_exporter
+	sudo PYTHONSAFEPATH=1 PYTHONPATH=src PYTHONDEVMODE=1 python3 -m certmonger_exporter
