@@ -1,5 +1,3 @@
-.DEFAULT_GOAL := run
-
 certmonger-exporter.pyz: src/certmonger_exporter/*.py
 	python3 -m zipapp -o certmonger-exporter.pyz src
 
