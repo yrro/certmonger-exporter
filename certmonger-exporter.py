@@ -199,6 +199,11 @@ class CertmongerCollector:
 
     def __init__(self, sock):
         self.__sock = sock
+        self.__bus = dbus.SystemBus()
+
+
+    def __del__(self):
+        self.__bus.close()
 
 
     def collect(self):
@@ -233,17 +238,20 @@ class CertmongerCollector:
 
 
     def collect_certmonger(self):
-        bus = dbus.SystemBus()
+        value = 0
 
-        systemd_manager = bus.get_object(SYSTEMD_DBUS_SERVICE, SYSTEMD_DBUS_MANAGER_OBJECT)
-        unit_obj = systemd_manager.GetUnit("certmonger.service", dbus_interface=SYSTEMD_DBUS_MANAGER_INTERFACE)
+        try:
+            systemd_manager = self.__bus.get_object(SYSTEMD_DBUS_SERVICE, SYSTEMD_DBUS_MANAGER_OBJECT)
 
-        unit = bus.get_object(SYSTEMD_DBUS_SERVICE, unit_obj)
-        unit_file_state = unit.Get(SYSTEMD_DBUS_UNIT_INTERFACE, "UnitFileState", dbus_interface=DBUS_DBUS_PROPERTIES_INTERFACE)
+            unit_obj = systemd_manager.GetUnit("certmonger.service", dbus_interface=SYSTEMD_DBUS_MANAGER_INTERFACE)
 
-        bus.close()
+            unit = self.__bus.get_object(SYSTEMD_DBUS_SERVICE, unit_obj)
+            unit_file_state = unit.Get(SYSTEMD_DBUS_UNIT_INTERFACE, "UnitFileState", dbus_interface=DBUS_DBUS_PROPERTIES_INTERFACE)
+            value = 1 if unit_file_state == "enabled" else 0
+        except dbus.DBusException as e:
+            logger.error("%s", e)
 
-        yield GaugeMetricFamily("certmonger_enabled", "1 if the certmonger service is enabled", value=1 if unit_file_state == "enabled" else 0)
+        yield GaugeMetricFamily("certmonger_enabled", "1 if the certmonger service is enabled; 0 if disabled or unknown", value=value)
 
 
     def collect_requests(self, requests):
