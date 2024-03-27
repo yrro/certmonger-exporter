@@ -47,6 +47,9 @@ def main(argv):
             child_sock.close()
             return main_parent(pid, parent_sock)
         finally:
+            # Tell child to exit
+            parent_sock.shutdown(socket.SHUT_RDWR)
+
             def alarm(signum, frame):
                 raise ChildDidNotRespond()
             signal.signal(signal.SIGALRM, alarm)
@@ -170,7 +173,6 @@ def service_requests_from_child(xr, parent_sock):
 
         if xr in rlist:
             logger.debug("Bye")
-            parent_sock.shutdown(socket.SHUT_RDWR)
             return 0
 
         if parent_sock in rlist:
