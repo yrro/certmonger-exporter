@@ -60,11 +60,20 @@ def main_child(child_sock):
 def child_scrape(child_sock):
     logger.debug("Child requesting scrape from parent...")
     child_sock.sendall(b"scrape-plz")
-    data_len = int.from_bytes(child_sock.recv(4))
+
+    data = b""
+    while len(data) < 4:
+        new_data = child_sock.recv(4 - len(data))
+        data += new_data
+        if len(new_data) == 0:
+            raise Exception("Parent closed socket")
+
+    data_len = int.from_bytes(data)
     logger.debug("Child expecting %s bytes from parent...", data_len)
+
     data = b""
     while len(data) != data_len:
-        new_data= child_sock.recv(max(data_len - len(data), SOCKET_BUFFER_LEN))
+        new_data = child_sock.recv(max(data_len - len(data), SOCKET_BUFFER_LEN))
         logger.debug("... recieved %s bytes from parent", len(new_data))
         data += new_data
         if len(new_data) == 0:
