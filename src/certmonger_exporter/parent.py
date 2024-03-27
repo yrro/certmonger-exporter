@@ -62,8 +62,9 @@ def service_requests_from_child(xr, parent_sock, bus):
             elif data == b'scrape-plz':
                 logger.debug("Parent scraping...")
                 data = pickle.dumps(list(parent_scrape(bus)), protocol=pickle.HIGHEST_PROTOCOL)
+                parent_sock.send(len(data).to_bytes(length=4))
                 parent_sock.sendall(data)
-                logger.debug("Parent sent %s bytes to child", len(data))
+                logger.debug("... parent sent %s bytes to child", len(data))
             else:
                 logger.error("Unknown message from child: %r", data)
                 return 1

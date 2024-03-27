@@ -10,7 +10,7 @@ import dbus
 from prometheus_client.core import GaugeMetricFamily, REGISTRY
 
 
-SOCKET_BUFFER_LEN = 512
+SOCKET_BUFFER_LEN = 4096
 
 
 logger = logging.getLogger(__name__)
@@ -25,19 +25,18 @@ def main_child(child_sock):
         logging.error("certmonger-exporter needs to be launched as root. The network-facing component will drop privileges by switching to the user %r.", pwent.pw_name)
         return 1
 
-    main_sock, server_sock = socket.socketpair()
-
-    REGISTRY.register(CertmongerCollector(server_sock))
+    collector = CertmongerCollector()
+    REGISTRY.register(collector)
     server, thread = start_httpd_server(int(os.environ.get("CERTMONGER_EXPORTER_PORT", "9630")))
 
     try:
         child_sock.sendall(b'ready')
         while True:
             logger.debug("Child waiting...")
-            rlist, _, _ = select.select([child_sock, main_sock], [], [])
+            rlist, _, _ = select.select([child_sock, collector.scrape_request_pipe], [], [])
 
             if child_sock in rlist:
-                data = child_sock.recv(32)
+                data = child_sock.recv(4)
                 if len(data) == 0:
                     logger.debug("Parent closed socket")
                     return 0
@@ -45,16 +44,9 @@ def main_child(child_sock):
                     logger.error("Unexpected message from parent: %r", data)
                     return 1
 
-            if main_sock in rlist:
-                data = main_sock.recv(32)
-                if len(data) == 0:
-                    logger.error("Server closed socket!")
-                    return 1
-                elif data == b"scrape-plz":
-                    main_sock.sendall(child_scrape(child_sock))
-                else:
-                    logger.error("Unexpected message from server: %r", data)
-                    return 1
+            if collector.scrape_request_pipe in rlist:
+                os.read(collector.scrape_request_pipe, 1)
+                collector.consume(child_scrape(child_sock))
 
     finally:
         server.shutdown()
@@ -65,6 +57,7 @@ def child_scrape(child_sock):
     logger.debug("Child requesting scrape from parent...")
     child_sock.sendall(b"scrape-plz")
     data_len = int.from_bytes(child_sock.recv(4))
+    logger.debug("Child expecting %s bytes from parent...", data_len)
     data = b""
     while len(data) != data_len:
         new_data= child_sock.recv(SOCKET_BUFFER_LEN)
@@ -72,7 +65,7 @@ def child_scrape(child_sock):
         data += new_data
         if len(new_data) == 0:
             raise Exception("Parent closed socket")
-    logger.debug("Child read %s bytes from parent", len(data))
+    logger.debug("... child read all %s bytes from parent", len(data))
     return data
 
 
@@ -96,31 +89,32 @@ class CertmongerCollector:
     SYSTEMD_DBUS_MANAGER_INTERFACE = "org.freedesktop.systemd1.Manager"
     SYSTEMD_DBUS_UNIT_INTERFACE = "org.freedesktop.systemd1.Unit"
 
-    def __init__(self, sock):
-        self.__sock = sock
+    def __init__(self):
         self.__bus = dbus.SystemBus()
+        self.__scraped_condition = threading.Condition()
+        self.__data = None
+        self.scrape_request_pipe, self.__scrape_request_pipe_wr = os.pipe()
 
 
     def __del__(self):
         self.__bus.close()
 
 
+    def consume(self, data):
+        with self.__scraped_condition:
+            self.__data = data
+            self.__scraped_condition.notify()
+
+
     def collect(self):
         logger.debug("Server collecting")
-        self.__sock.sendall(b'scrape-plz')
-        data = b''
-        while True:
-            new_data = self.__sock.recv(SOCKET_BUFFER_LEN)
-            data += new_data
-            if len(new_data) == SOCKET_BUFFER_LEN:
-                continue
-            elif len(new_data) == 0:
-                # main thread has closed the socket, should never happen!
-                return
-            else:
-                break
+        os.write(self.__scrape_request_pipe_wr, b"\0")
 
-        requests = pickle.loads(data)
+        with self.__scraped_condition:
+            self.__scraped_condition.wait_for(lambda: not self.__data is None)
+            requests = pickle.loads(self.__data)
+            self.__data = None
+
         logger.debug("Server unpickled %s requests from parent", len(requests))
         yield from self.collect_requests(requests)
         yield from self.collect_certmonger()
