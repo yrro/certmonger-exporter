@@ -60,7 +60,7 @@ def main_child(child_sock):
 def child_scrape(child_sock):
     logger.debug("Child requesting scrape from parent...")
     child_sock.sendall(b"scrape-plz")
-    data_len = int.from_bytes(sock_recv_len(child_sock, 4))
+    data_len = int.from_bytes(sock_recv_len(child_sock, 4), byteorder='big')
     return sock_recv_len(child_sock, data_len)
 
 
