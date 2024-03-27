@@ -30,7 +30,7 @@ def main(argv):
             parent_sock.shutdown(socket.SHUT_RDWR)
 
             try:
-                pid_, status = waitpid_timeout.waitpid(pid, 0, 3)
+                pid_, status = waitpid_timeout.waitpid(pid, 0, 2)
             except waitpid_timeout.Timeout:
                 logger.warning("Child did not exit itself, sending SIGKILL")
                 os.kill(pid, signal.SIGKILL)
