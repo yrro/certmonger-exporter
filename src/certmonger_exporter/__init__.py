@@ -32,7 +32,7 @@ def main(argv):
             try:
                 pid_, status = waitpid_timeout.waitpid(pid, 0, 2)
             except waitpid_timeout.Timeout:
-                logger.warning("Child did not exit itself, sending SIGKILL")
+                logger.warning("Child did not exit, sending SIGKILL")
                 os.kill(pid, signal.SIGKILL)
             else:
                 if pid_ == 0:
