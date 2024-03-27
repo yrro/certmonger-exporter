@@ -64,7 +64,7 @@ def child_scrape(child_sock):
     logger.debug("Child expecting %s bytes from parent...", data_len)
     data = b""
     while len(data) != data_len:
-        new_data= child_sock.recv(SOCKET_BUFFER_LEN)
+        new_data= child_sock.recv(max(data_len - len(data), SOCKET_BUFFER_LEN))
         logger.debug("... recieved %s bytes from parent", len(new_data))
         data += new_data
         if len(new_data) == 0:
