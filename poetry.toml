@@ -1,0 +1,4 @@
+[virtualenvs.options]
+no-pip = true
+no-setuptools = true
+system-site-packages = true
