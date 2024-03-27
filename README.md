@@ -38,6 +38,10 @@ certmonger_request_not_valid_before_date_seconds{ca="IPA",nickname="202403111117
 # TYPE certmonger_request_stuck gauge
 certmonger_request_stuck{ca="IPA",nickname="20240311111713",storage_location="/etc/pki/tls/certs/grafana.crt",storage_nickname="",storage_token="",storage_type="FILE"} 0.0
 
+# HELP certmonger_requests_total Number of certificates managed by Certonger
+# TYPE certmonger_requests_total gauge
+certmonger_requests_total 1.0
+
 # HELP certmonger_enabled 1 if the certmonger service is enabled
 # TYPE certmonger_enabled gauge
 certmonger_enabled 1.0

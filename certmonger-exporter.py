@@ -257,6 +257,8 @@ class CertmongerCollector:
     def collect_requests(self, requests):
         labelnames = ["nickname", "ca", "storage_type", "storage_location", "storage_nickname", "storage_token"]
 
+        yield GaugeMetricFamily("certmonger_requests_total", "Number of certificates managed by Certonger", value=len(requests))
+
         mf_ca_error = GaugeMetricFamily("certmonger_request_ca_error", "1 if the CA returned an error when certificate signing was requested", labels=labelnames)
         mf_key_generated_date = GaugeMetricFamily("certmonger_request_key_generated_date_seconds", "Timestamp the private key was generated", labels=labelnames)
         mf_key_issued_count = GaugeMetricFamily("certmonger_request_key_issued_count", "number of times a certificate was issued for the private key", labels=labelnames)
