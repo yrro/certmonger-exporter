@@ -68,6 +68,7 @@ def main(argv):
 def main_parent(child_pid, parent_sock):
     xr, xw = os.pipe()
     def sigterm(signum, frame):
+        notify("STOPPING=1")
         os.write(xw, b'\0')
     signal.signal(signal.SIGTERM, sigterm)
 
@@ -169,7 +170,6 @@ def service_requests_from_child(xr, parent_sock):
 
         if xr in rlist:
             logger.debug("Bye")
-            notify("STOPPING=1")
             parent_sock.shutdown(socket.SHUT_RDWR)
             return 0
 
