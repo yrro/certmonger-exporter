@@ -75,18 +75,23 @@ def main_parent(child_pid, parent_sock):
         os.write(xw, b'\0')
     signal.signal(signal.SIGTERM, sigterm)
 
-    logger.debug("Waiting for child to be ready")
-    data = parent_sock.recv(32)
-    if data == b'':
-        logger.error("Child failed to initialize")
-        return 1
-    elif data == b'ready':
-        logger.debug("Child is ready")
-        notify("READY=1")
-        return service_requests_from_child(xr, parent_sock)
-    else:
-        logger.error("Unexpected message from child: %r", data)
-        return 1
+    bus = dbus.SystemBus()
+    try:
+        logger.debug("Waiting for child to be ready")
+        data = parent_sock.recv(32)
+        if data == b'':
+            logger.error("Child failed to initialize")
+            return 1
+        elif data == b'ready':
+            logger.debug("Child is ready")
+            notify("READY=1")
+            return service_requests_from_child(xr, parent_sock, bus)
+        else:
+            logger.error("Unexpected message from child: %r", data)
+            return 1
+
+    finally:
+        bus.close()
 
 
 def main_child(child_sock):
@@ -167,7 +172,7 @@ def start_httpd_server(port, addr='', registry=REGISTRY):
     return httpd, t
 
 
-def service_requests_from_child(xr, parent_sock):
+def service_requests_from_child(xr, parent_sock, bus):
     while True:
         rlist, _, _ = select.select([xr, parent_sock], [], [])
 
@@ -182,7 +187,7 @@ def service_requests_from_child(xr, parent_sock):
                 return 1
             elif data == b'scrape-plz':
                 logger.debug("Parent scraping...")
-                data = pickle.dumps(list(parent_scrape()), protocol=pickle.HIGHEST_PROTOCOL)
+                data = pickle.dumps(list(parent_scrape(bus)), protocol=pickle.HIGHEST_PROTOCOL)
                 parent_sock.sendall(data)
                 logger.debug("Parent sent %s bytes to child", len(data))
             else:
@@ -274,9 +279,7 @@ class CertmongerCollector:
         yield mf_stuck
 
 
-def parent_scrape():
-    bus = dbus.SystemBus()
-
+def parent_scrape(bus):
     certmonger = bus.get_object(CERTMONGER_DBUS_SERVICE, CERTMONGER_DBUS_CERTMONGER_OBJECT)
 
     for request_obj in certmonger.get_requests(dbus_interface=CERTMONGER_DBUS_CERTMONGER_INTERFACE):
@@ -309,8 +312,6 @@ def parent_scrape():
                     ]}
 
         yield labels, properties
-
-    bus.close()
 
 
 def excepthook(exc_type, exc_value, exc_traceback):
