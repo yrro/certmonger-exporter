@@ -4,6 +4,7 @@ import logging
 import os
 import signal
 import socket
+import sys
 
 from systemd.journal import JournalHandler
 
@@ -46,13 +47,17 @@ def excepthook(exc_type, exc_value, exc_traceback):
 
 
 def configure_logging():
-    level = os.environ.get("CERTMONGER_EXPORTER_LOG_LEVEL", "info").upper()
+    level = os.environ.get("CERTMONGER_EXPORTER_LOG_LEVEL", None)
+    if level is None:
+        level = "DEBUG" if os.isatty(sys.stdin.fileno()) else "INFO"
+
     if "INVOCATION_ID" in os.environ:
         handlers = [JournalHandler(SYSLOG_IDENTIFIER="certmonger-exporter")]
     else:
         handlers = None
+
     logging.basicConfig(
-        level=level,
+        level=level.upper(),
         handlers=handlers,
         format="%(message)s",
     )

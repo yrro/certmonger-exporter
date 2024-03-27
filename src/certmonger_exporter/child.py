@@ -17,9 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 def main_child(child_sock):
-    # We don't want to recieve SIGINT from the developer's terminal.
-    #os.setsid()
-
     pwent = pwd.getpwnam(os.environ.get("CERTMONGER_EXPORTER_USER", "nobody"))
     try:
         os.setgid(pwent.pw_gid)
