@@ -46,7 +46,11 @@ def main_child(child_sock):
 
             if collector.scrape_request_pipe in rlist:
                 os.read(collector.scrape_request_pipe, 1)
-                collector.consume(child_scrape(child_sock))
+
+                data = child_scrape(child_sock)
+                requests = pickle.loads(data)
+                logger.debug("Child unpickled %s requests from parent", len(requests))
+                collector.consume(requests)
 
     finally:
         server.shutdown()
@@ -92,7 +96,7 @@ class CertmongerCollector:
     def __init__(self):
         self.__bus = dbus.SystemBus()
         self.__scraped_condition = threading.Condition()
-        self.__data = None
+        self.__requests = None
         self.scrape_request_pipe, self.__scrape_request_pipe_wr = os.pipe()
 
 
@@ -102,7 +106,7 @@ class CertmongerCollector:
 
     def consume(self, data):
         with self.__scraped_condition:
-            self.__data = data
+            self.__requests = data
             self.__scraped_condition.notify()
 
 
@@ -111,12 +115,10 @@ class CertmongerCollector:
         os.write(self.__scrape_request_pipe_wr, b"\0")
 
         with self.__scraped_condition:
-            self.__scraped_condition.wait_for(lambda: not self.__data is None)
-            requests = pickle.loads(self.__data)
-            self.__data = None
+            self.__scraped_condition.wait_for(lambda: not self.__requests is None)
+            yield from self.collect_requests(self.__requests)
+            self.__requests = None
 
-        logger.debug("Server unpickled %s requests from parent", len(requests))
-        yield from self.collect_requests(requests)
         yield from self.collect_certmonger()
 
 
