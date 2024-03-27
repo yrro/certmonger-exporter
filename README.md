@@ -53,9 +53,11 @@ On CentOS Stream or RHEL, [enable
 EPEL](https://docs.fedoraproject.org/en-US/epel/#_quickstart), then:
 
 ```
+$ python3 -m zipapp -o certmonger-exporter.pyz src
+
 # dnf install python3-systemd python3-dbus python3-prometheus_client
 
-# install -t /usr/local/libexec -m 755 certmonger-exporter.py
+# install -t /usr/local/libexec -m 755 certmonger-exporter.pyz
 
 # install -t /etc/systemd/system certmonger-exporter.service
 

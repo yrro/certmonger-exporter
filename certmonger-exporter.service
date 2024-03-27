@@ -1,6 +1,6 @@
 [Service]
 Type=notify
-ExecStart=/usr/local/libexec/certmonger-exporter.py
+ExecStart=/usr/bin/python3 /usr/local/libexec/certmonger-exporter.pyz
 Environment=PYTHONFAULTHANDLER=1
 Restart=always
 KillMode=mixed
