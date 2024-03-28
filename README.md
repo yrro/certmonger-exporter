@@ -78,6 +78,19 @@ $ make
 # systemctl enable --now certmonger-exporter.service
 
 # curl localhost:9630/metrics
+
+# firewall-cmd --zone=public --permanent --add-port=9630/tcp && firewall-cmd --reload
+```
+
+Then configure Prometheus to scrape from the exporter:
+
+```
+scrape_configs:
+
+- job_name: certmonger
+  static_configs:
+  - targets:
+    - myhost.example.com:9630
 ```
 
 Some configuration can be performed by setting environment variables (e.g., via
