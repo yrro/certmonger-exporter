@@ -1,7 +1,7 @@
 [Service]
 Type=notify
 User=nobody
-ExecStart=/usr/bin/python3 /usr/local/libexec/certmonger-exporter.pyz
+ExecStart=/usr/bin/python3 -I /usr/local/libexec/certmonger-exporter.pyz
 Restart=always
 
 [Install]
