@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 class CertmongerCollector:
 
 
-
     def __init__(self):
         self.__bus = dbus.SystemBus()
 
