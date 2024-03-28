@@ -10,7 +10,10 @@ stamp-pip-install: requirements.txt
 	python3 -m pip install -r requirements.txt -t src
 	touch stamp-pip-install
 
-certmonger-exporter.pyz: stamp-pip-install $(find src -type f)
+src/__main__.py:
+	ln -sr -t src src/certmonger_exporter/__main__.py
+
+certmonger-exporter.pyz: stamp-pip-install $(find src -type f) src/__main__.py
 	find src -name '*.pyc' -delete
 	find src -name '*.pyo' -delete
 	find src -name '__pycache__' -delete
