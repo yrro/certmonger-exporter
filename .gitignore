@@ -1,2 +1,6 @@
+/src/*
+!/src/certmonger_exporter
+!/src/__main__.py
 __pycache__/
 *.pyz
+/stamp-*
