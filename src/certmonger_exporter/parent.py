@@ -29,13 +29,13 @@ def main_parent(child_pid, parent_sock):
 
     bus = dbus.SystemBus()
     try:
-        logger.debug("Waiting for child to be ready")
+        logger.debug("Waiting for child to be ready...")
         data = parent_sock.recv(32)
         if data == b'':
-            logger.error("Child failed to initialize")
+            logger.error("... child failed to initialize!")
             return 1
         elif data == b'ready':
-            logger.debug("Child is ready")
+            logger.debug("... child is ready")
             notify("READY=1")
             return service_requests_from_child(xr, parent_sock, bus)
         else:
