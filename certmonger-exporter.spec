@@ -5,7 +5,7 @@ Summary:        Prometheus exporter for Certmonger
 
 License:        GPLv3
 URL:            https://github.com/yrro/certmonger-exporter
-Source0:        https://github.com/yrro/certmonger-exporter/archive/refs/heads/main.tar.gz#/%{name}-%{version}.tar.gz
+Source0:        https://github.com/yrro/certmonger-exporter/archive/refs/heads/%{version}.tar.gz#/%{name}-%{version}.tar.gz
 
 BuildRequires:  make
 BuildRequires:  python3
