@@ -42,6 +42,7 @@ rm -rf "$RPM_BUILD_ROOT"
 %{_libexecdir}/certmonger-exporter.pyz
 %license COPYING
 %doc README.md
+%doc prometheus-rules.yaml
 
 
 %post
