@@ -118,6 +118,7 @@ This exporter grew out of a cron job. It has been written with the following
 goals in mind:
 
 1. It should run on RHEL 8 (which ships Python 3.6)
-2. It should not require any dependencies outside of RHEL or EPEL
+2. It should not require dependencies outside of EPEL
 3. It should consist of a single file
+   (somewhat un-necessary now that we build an RPM)
 4. The network-facing part of the exporter must not run as root

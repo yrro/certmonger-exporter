@@ -6,7 +6,14 @@ libexecdir ?= $(prefix)/libexec
 .PHONY: all
 all: certmonger-exporter.pyz
 
-certmonger-exporter.pyz: src/certmonger_exporter/*.py
+stamp-pip-install: requirements.txt
+	python3 -m pip install -r requirements.txt -t src
+	touch stamp-pip-install
+
+certmonger-exporter.pyz: stamp-pip-install $(find src -type f)
+	find src -name '*.pyc' -delete
+	find src -name '*.pyo' -delete
+	find src -name '__pycache__' -delete
 	python3 -m zipapp -o certmonger-exporter.pyz src
 
 certmonger-exporter.service: certmonger-exporter.service.in
@@ -22,5 +29,9 @@ install: certmonger-exporter.pyz certmonger-exporter.service
 	$(INSTALL) -t $(DESTDIR)$(sysconfdir)/dbus-1/system.d -m 644 certmonger-exporter.dbus.conf
 
 .PHONY: run
-run:
-	PYTHONSAFEPATH=1 PYTHONPATH=src PYTHONDEVMODE=1 python3 -m certmonger_exporter
+run: stamp-pip-install
+	PYTHONSAFEPATH=1 \
+	  PYTHONPATH=src \
+	  PYTHONDEVMODE=1 \
+	  CERTMONGER_EXPORTER_LOG_LEVEL=debug \
+	    python3 -m certmonger_exporter
