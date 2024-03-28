@@ -33,34 +33,43 @@ class CertmongerCollector:
         self.__bus.close()
 
 
-    def collect(self):
-        yield from self.__collect_requests()
-        yield from self.__collect_certmonger()
+    def collect(self, describe=False):
+        yield from self.__collect_requests(describe)
+        yield from self.__collect_certmonger(describe)
 
 
-    def __collect_certmonger(self):
+    def describe(self):
+        yield from self.collect(describe=True)
 
-        systemd_manager = self.__bus.get_object(SYSTEMD_DBUS_SERVICE, SYSTEMD_DBUS_MANAGER_OBJECT)
 
-        try:
-            unit_obj = systemd_manager.GetUnit("certmonger.service", dbus_interface=SYSTEMD_DBUS_MANAGER_INTERFACE)
-        except dbus.DBusException as e:
-            if e.get_dbus_name() == "org.freedesktop.systemd1.NoSuchUnit":
-                logger.warning(f"{e.get_dbus_name()} certmonger.service; is certmonger installed?")
-                value = 0
+    def __collect_certmonger(self, describe):
+        mf_enabled = GaugeMetricFamily("certmonger_enabled", "1 if the certmonger service is enabled; 0 if disabled or unknown")
+
+        if not describe:
+            systemd_manager = self.__bus.get_object(SYSTEMD_DBUS_SERVICE, SYSTEMD_DBUS_MANAGER_OBJECT)
+
+            try:
+                unit_obj = systemd_manager.GetUnit("certmonger.service", dbus_interface=SYSTEMD_DBUS_MANAGER_INTERFACE)
+            except dbus.DBusException as e:
+                if e.get_dbus_name() == "org.freedesktop.systemd1.NoSuchUnit":
+                    logger.warning(f"{e.get_dbus_name()} certmonger.service; is certmonger installed?")
+                    value = 0
+                else:
+                    raise
             else:
-                raise
-        else:
-            unit = self.__bus.get_object(SYSTEMD_DBUS_SERVICE, unit_obj)
-            unit_file_state = unit.Get(SYSTEMD_DBUS_UNIT_INTERFACE, "UnitFileState", dbus_interface=DBUS_DBUS_PROPERTIES_INTERFACE)
-            value = 1 if unit_file_state == "enabled" else 0
+                unit = self.__bus.get_object(SYSTEMD_DBUS_SERVICE, unit_obj)
+                unit_file_state = unit.Get(SYSTEMD_DBUS_UNIT_INTERFACE, "UnitFileState", dbus_interface=DBUS_DBUS_PROPERTIES_INTERFACE)
+                value = 1 if unit_file_state == "enabled" else 0
 
-        yield GaugeMetricFamily("certmonger_enabled", "1 if the certmonger service is enabled; 0 if disabled or unknown", value=value)
+            mf_enabled.add_metric([], value)
+
+        yield mf_enabled
 
 
-    def __collect_requests(self):
+    def __collect_requests(self, describe):
         labelnames = "nickname", "ca", "storage_type", "storage_location", "storage_nickname", "storage_token"
 
+        mf_requests_total = GaugeMetricFamily("certmonger_requests_total", "Number of certificates managed by Certmonger")
         mfs = [
             GaugeMetricFamily("certmonger_request_ca_error", "1 if the CA returned an error when certificate signing was requested", labels=labelnames),
             GaugeMetricFamily("certmonger_request_key_generated_date_seconds", "Timestamp the private key was generated", labels=labelnames),
@@ -70,15 +79,19 @@ class CertmongerCollector:
             GaugeMetricFamily("certmonger_request_not_valid_before_date_seconds", "Timestamp after which certificate is valid", labels=labelnames),
             GaugeMetricFamily("certmonger_request_stuck", "1 if request is stuck", labels=labelnames),
         ]
-        mfs_by_name = {mf.name: mf for mf in mfs}
 
-        certmonger = self.__bus.get_object(CERTMONGER_DBUS_SERVICE, CERTMONGER_DBUS_CERTMONGER_OBJECT)
-        for i, request_obj in enumerate(certmonger.get_requests(dbus_interface=CERTMONGER_DBUS_CERTMONGER_INTERFACE)):
-            request = self.__bus.get_object(CERTMONGER_DBUS_SERVICE, request_obj)
-            self.__collect_request(mfs_by_name, request)
+        if not describe:
+            mfs_by_name = {mf.name: mf for mf in mfs}
+
+            certmonger = self.__bus.get_object(CERTMONGER_DBUS_SERVICE, CERTMONGER_DBUS_CERTMONGER_OBJECT)
+            for i, request_obj in enumerate(certmonger.get_requests(dbus_interface=CERTMONGER_DBUS_CERTMONGER_INTERFACE)):
+                request = self.__bus.get_object(CERTMONGER_DBUS_SERVICE, request_obj)
+                self.__collect_request(mfs_by_name, request)
+
+            mf_requests_total.add_metric([], i+i)
 
         yield from mfs
-        yield GaugeMetricFamily("certmonger_requests_total", "Number of certificates managed by Certonger", value=1+i)
+        yield mf_requests_total
 
 
     def __collect_request(self, mfs_by_name, request):
