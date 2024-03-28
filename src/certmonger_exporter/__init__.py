@@ -18,28 +18,32 @@ logger = logging.getLogger(__name__)
 
 def main(argv):
     parent_sock, child_sock = socket.socketpair()
-    pid = os.fork()
-    if pid == 0:
-        parent_sock.close()
-        return main_child(child_sock)
-    else:
-        try:
-            child_sock.close()
-            return main_parent(pid, parent_sock)
-        finally:
-            # Tell child to exit
-            parent_sock.shutdown(socket.SHUT_RDWR)
-
+    try:
+        pid = os.fork()
+        if pid == 0:
+            parent_sock.close()
+            return main_child(child_sock)
+        else:
             try:
-                pid_, status = waitpid_timeout.waitpid(pid, 0, 2)
-            except waitpid_timeout.Timeout:
-                logger.warning("Child did not exit, sending SIGKILL")
-                os.kill(pid, signal.SIGKILL)
-            else:
-                if pid_ == 0:
-                    logger.warning("Child process %r does not exist!?", pid)
+                child_sock.close()
+                return main_parent(pid, parent_sock)
+            finally:
+                # Tell child to exit
+                parent_sock.shutdown(socket.SHUT_RDWR)
+
+                try:
+                    pid_, status = waitpid_timeout.waitpid(pid, 0, 2)
+                except waitpid_timeout.Timeout:
+                    logger.warning("Child did not exit, sending SIGKILL")
+                    os.kill(pid, signal.SIGKILL)
                 else:
-                    logger.info("Child exit status: %r", status)
+                    if pid_ == 0:
+                        logger.warning("Child process %r does not exist!?", pid)
+                    else:
+                        logger.info("Child exit status: %r", status)
+    finally:
+        parent_sock.close()
+        child_sock.close()
 
 
 def excepthook(exc_type, exc_value, exc_traceback):
