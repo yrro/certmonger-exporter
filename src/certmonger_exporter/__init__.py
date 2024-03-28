@@ -28,7 +28,7 @@ def main(argv):
     signal.signal(signal.SIGTERM, sigterm)
     collector = CertmongerCollector()
     REGISTRY.register(collector)
-    server, thread = start_httpd_server(int(os.environ.get("CERTMONGER_EXPORTER_PORT", "9630")), registry=REGISTRY)
+    server, thread = start_httpd_server(int(os.environ.get("CERTMONGER_EXPORTER_PORT", "9632")), registry=REGISTRY)
     try:
         notify("READY=1")
 
