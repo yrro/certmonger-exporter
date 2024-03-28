@@ -11,8 +11,8 @@ from prometheus_client.core import REGISTRY
 from systemd.daemon import notify
 from systemd.journal import JournalHandler
 
+from .prometheus_client import start_http_server
 from .collector import CertmongerCollector
-from .prometheus_client import start_httpd_server
 from .threading import set_name
 
 
@@ -29,7 +29,7 @@ def main(argv):
     signal.signal(signal.SIGTERM, sigterm)
     collector = CertmongerCollector()
     REGISTRY.register(collector)
-    server, thread = start_httpd_server(int(os.environ.get("CERTMONGER_EXPORTER_PORT", "9632")), registry=REGISTRY)
+    server, thread = start_http_server(int(os.environ.get("CERTMONGER_EXPORTER_PORT", "9632")), registry=REGISTRY)
     try:
         set_name(thread, "httpd")
         notify("READY=1")
