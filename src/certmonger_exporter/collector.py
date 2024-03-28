@@ -40,17 +40,20 @@ class CertmongerCollector:
 
     def __collect_certmonger(self):
 
-        value = 0
+        systemd_manager = self.__bus.get_object(SYSTEMD_DBUS_SERVICE, SYSTEMD_DBUS_MANAGER_OBJECT)
+
         try:
-            systemd_manager = self.__bus.get_object(SYSTEMD_DBUS_SERVICE, SYSTEMD_DBUS_MANAGER_OBJECT)
-
             unit_obj = systemd_manager.GetUnit("certmonger.service", dbus_interface=SYSTEMD_DBUS_MANAGER_INTERFACE)
-
+        except dbus.DBusException as e:
+            if e.get_dbus_name() == "org.freedesktop.systemd1.NoSuchUnit":
+                logger.warning(f"{e.get_dbus_name()} certmonger.service; is certmonger installed?")
+                value = 0
+            else:
+                raise
+        else:
             unit = self.__bus.get_object(SYSTEMD_DBUS_SERVICE, unit_obj)
             unit_file_state = unit.Get(SYSTEMD_DBUS_UNIT_INTERFACE, "UnitFileState", dbus_interface=DBUS_DBUS_PROPERTIES_INTERFACE)
             value = 1 if unit_file_state == "enabled" else 0
-        except dbus.DBusException as e:
-            logger.error("%s", e)
 
         yield GaugeMetricFamily("certmonger_enabled", "1 if the certmonger service is enabled; 0 if disabled or unknown", value=value)
 
