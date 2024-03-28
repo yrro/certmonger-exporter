@@ -63,26 +63,38 @@ file](certmonger-exporter.service).
 
 ## How to install
 
-On CentOS Stream or RHEL, [enable
-EPEL](https://docs.fedoraproject.org/en-US/epel/#_quickstart), then:
+To build and install an RPM on CentOS Stream (or RHEL) 8:
 
 ```
-$ make
+# dnf install rpmdevtools
 
-# make install
+$ rpmdev-setuptree
 
-# dnf install python3-systemd python3-dbus python3-prometheus_client
+$ spectool -f -R -g certmonger-expoter.spec
 
-# systemctl daemon-reload
+$ rpmbuild -ba certmonger-exporter.spec
 
+# dnf install ~/rpmbuild/RPMS/noarch/certmonger-exporter-main-1.el8.noarch.rpm
+```
+
+(For the time being we're building directly from the `main` branch, so the
+exact rpm filename is subject to change.)
+
+To enable, start & test:
+
+```
 # systemctl enable --now certmonger-exporter.service
 
-# curl localhost:9632/metrics
+$ curl localhost:9632/metrics
+```
 
+To configure Prometheus to scrape the exporter:
+
+```
 # firewall-cmd --zone=public --permanent --add-port=9632/tcp && firewall-cmd --reload
 ```
 
-Then configure Prometheus to scrape from the exporter:
+and configure Prometheus like so:
 
 ```
 scrape_configs:
