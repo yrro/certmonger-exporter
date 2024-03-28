@@ -13,6 +13,7 @@ from systemd.journal import JournalHandler
 
 from .collector import CertmongerCollector
 from .prometheus_client import start_httpd_server
+from .threading import set_name
 
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ def main(argv):
     REGISTRY.register(collector)
     server, thread = start_httpd_server(int(os.environ.get("CERTMONGER_EXPORTER_PORT", "9632")), registry=REGISTRY)
     try:
+        set_name(thread, "httpd")
         notify("READY=1")
 
         while True:
