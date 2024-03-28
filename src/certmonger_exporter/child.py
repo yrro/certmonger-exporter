@@ -54,6 +54,7 @@ def main_child(child_sock):
 
     finally:
         server.shutdown()
+        server.server_close()
         thread.join()
 
 
