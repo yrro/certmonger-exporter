@@ -47,13 +47,21 @@ certmonger_requests_total 1.0
 certmonger_enabled 1.0
 ```
 
-## How to run
+## How to install
+
+By default, certmonger only allows `root` to view information about the
+certificates that it tracks, but we don't want to run the exporter as root.
+
+The solution is to run it as `nobody` and modify D-Bus policy to allow `nobody`
+to query certmonger. If you prefer to use another user, you only need to edit
+[the D-Bus policy file](certmonger-exporter.dbus.conf) and [the systemd unit
+file](certmonger-exporter.service).
 
 On CentOS Stream or RHEL, [enable
 EPEL](https://docs.fedoraproject.org/en-US/epel/#_quickstart), then:
 
 ```
-$ make certmonger-exporter.pyz
+$ make
 
 # make install
 
@@ -72,8 +80,6 @@ Some configuration can be performed by setting environment variables (e.g., via
 * `CERTMONGER_EXPORTER_LOG_LEVEL`: set to `debug` for more logging; defaults to
   `info`
 * `CERTMONGER_EXPORTER_PORT`: the exporter will listen on this port; defaults to `9630`
-* `CERTMONGER_EXPORTER_USER`: the network-facing part of the exporter will
-  run as this user; defaults to `nobody`
 
 ## Design
 
@@ -83,5 +89,4 @@ goals in mind:
 1. It should run on RHEL 8 (which ships Python 3.6)
 2. It should not require any dependencies outside of RHEL or EPEL
 3. It should consist of a single file
-4. While only the root user may query certmonger, the network-facing part of
-   the exporter should run as a non-privileged user
+4. The network-facing part of the exporter must not run as root

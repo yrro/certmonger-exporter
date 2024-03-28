@@ -3,47 +3,45 @@
 import logging
 import os
 import signal
+import select
 import socket
 import sys
 
+from prometheus_client.core import REGISTRY
+from systemd.daemon import notify
 from systemd.journal import JournalHandler
 
-from . import waitpid_timeout
-from .parent import main_parent
-from .child import main_child
+from .collector import CertmongerCollector
+from .prometheus_client import start_httpd_server
 
 
 logger = logging.getLogger(__name__)
 
 
 def main(argv):
-    parent_sock, child_sock = socket.socketpair()
-    try:
-        pid = os.fork()
-        if pid == 0:
-            parent_sock.close()
-            return main_child(child_sock)
-        else:
-            try:
-                child_sock.close()
-                return main_parent(pid, parent_sock)
-            finally:
-                # Tell child to exit
-                parent_sock.shutdown(socket.SHUT_RDWR)
 
-                try:
-                    pid_, status = waitpid_timeout.waitpid(pid, 0, 2)
-                except waitpid_timeout.Timeout:
-                    logger.warning("Child did not exit, sending SIGKILL")
-                    os.kill(pid, signal.SIGKILL)
-                else:
-                    if pid_ == 0:
-                        logger.warning("Child process %r does not exist!?", pid)
-                    else:
-                        logger.info("Child exit status: %r", status)
+    xr, xw = os.pipe()
+    def sigterm(signum, frame):
+        notify("STOPPING=1")
+        os.write(xw, b'\0')
+
+    signal.signal(signal.SIGTERM, sigterm)
+    collector = CertmongerCollector()
+    REGISTRY.register(collector)
+    server, thread = start_httpd_server(int(os.environ.get("CERTMONGER_EXPORTER_PORT", "9630")), registry=REGISTRY)
+    try:
+        notify("READY=1")
+
+        while True:
+            rlist, _, _ = select.select([xr], [], [])
+
+            if xr in rlist:
+                return 0
+
     finally:
-        parent_sock.close()
-        child_sock.close()
+        server.shutdown()
+        server.server_close()
+        thread.join()
 
 
 def excepthook(exc_type, exc_value, exc_traceback):
