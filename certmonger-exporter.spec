@@ -34,11 +34,15 @@ requests, as well as certmonger itself.
 %install
 rm -rf "$RPM_BUILD_ROOT"
 %make_install sysconfdir:=%{_sysconfdir} prefix:=%{_prefix} libexecdir:=%{_libexecdir}
+install -d %{?buildroot}%{_prefix}/lib
+mv -t %{?buildroot}%{_prefix}/lib %{?buildroot}/etc/systemd/
+install -d %{?buildroot}%{_datadir}
+mv -t %{?buildroot}%{_datadir} %{?buildroot}/etc/dbus-1
 
 
 %files
-%{_sysconfdir}/dbus-1/system.d/certmonger-exporter.dbus.conf
-%{_sysconfdir}/systemd/system/certmonger-exporter.service
+%{_datadir}/dbus-1/system.d/certmonger-exporter.dbus.conf
+%{_prefix}/lib/systemd/system/certmonger-exporter.service
 %{_libexecdir}/certmonger-exporter.pyz
 %license COPYING
 %doc README.md
