@@ -12,7 +12,7 @@ BuildRequires:  python3
 Requires:       python3
 Requires:       python3-systemd
 Requires:       python3-dbus
-Requires:       python3-prometheus_client
+Requires:       certmonger
 
 BuildArch:      noarch
 
