@@ -89,11 +89,13 @@ def start_httpd_server(port, addr='', registry=REGISTRY):
 
 
 class CertmongerCollector:
+
     DBUS_DBUS_PROPERTIES_INTERFACE = "org.freedesktop.DBus.Properties"
     SYSTEMD_DBUS_SERVICE = "org.freedesktop.systemd1"
     SYSTEMD_DBUS_MANAGER_OBJECT = "/org/freedesktop/systemd1"
     SYSTEMD_DBUS_MANAGER_INTERFACE = "org.freedesktop.systemd1.Manager"
     SYSTEMD_DBUS_UNIT_INTERFACE = "org.freedesktop.systemd1.Unit"
+
 
     def __init__(self):
         self.__bus = dbus.SystemBus()
