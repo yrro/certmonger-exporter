@@ -47,15 +47,21 @@ certmonger_requests_total 1.0
 certmonger_enabled 1.0
 ```
 
-## How to install
+## How it works
 
-By default, certmonger only allows `root` to view information about the
-certificates that it tracks, but we don't want to run the exporter as root.
+The exporter queries certmonger via [its D-Bus
+API](https://pagure.io/certmonger/blob/master/f/src/tdbus.h). Normally access
+to this API is restricted to `root`; however we don't want to write a
+network-facing service that runs as root.
 
-The solution is to run it as `nobody` and modify D-Bus policy to allow `nobody`
-to query certmonger. If you prefer to use another user, you only need to edit
-[the D-Bus policy file](certmonger-exporter.dbus.conf) and [the systemd unit
+The solution and modify D-Bus policy to allow `nobody` to query certmonger, and
+run the exporter as this non-privileged user.
+
+If you prefer to use another user, you only need to edit [the D-Bus policy
+file](certmonger-exporter.dbus.conf) and [the systemd unit
 file](certmonger-exporter.service).
+
+## How to install
 
 On CentOS Stream or RHEL, [enable
 EPEL](https://docs.fedoraproject.org/en-US/epel/#_quickstart), then:
