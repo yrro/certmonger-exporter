@@ -1,9 +1,6 @@
 import ctypes
 
 
-PR_SET_NAME = 15
-
-
 libpthread = ctypes.CDLL("libpthread.so.0", use_errno=True)
 
 pthread_setname_np = libpthread.pthread_setname_np
