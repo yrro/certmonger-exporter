@@ -1,4 +1,5 @@
 INSTALL ?= install
+PYTHON ?= python3
 prefix ?= /usr/local
 sysconfdir ?= /etc
 libexecdir ?= $(prefix)/libexec
@@ -7,7 +8,7 @@ libexecdir ?= $(prefix)/libexec
 all: certmonger-exporter.pyz
 
 stamp-pip-install: requirements.txt
-	PIP_REQUIRE_VIRTUALENV=false python3 -m pip install -r requirements.txt -t src
+	PIP_REQUIRE_VIRTUALENV=false $(PYTHON) -m pip install -r requirements.txt -t src
 	touch stamp-pip-install
 
 src/__main__.py:
@@ -17,10 +18,13 @@ certmonger-exporter.pyz: stamp-pip-install $(find src -type f) src/__main__.py
 	find src -name '*.pyc' -delete
 	find src -name '*.pyo' -delete
 	find src -name '__pycache__' -delete
-	python3 -m zipapp -o certmonger-exporter.pyz src
+	$(PYTHON) -m zipapp -o certmonger-exporter.pyz src
 
 certmonger-exporter.service: certmonger-exporter.service.in
-	sed -e s,@libexecdir@,$(libexecdir), $< > $@
+	sed \
+	  -e s,@libexecdir@,$(libexecdir), \
+	  -e s,@python@,$(PYTHON), \
+	  $< > $@
 
 .PHONY: install
 install: certmonger-exporter.pyz certmonger-exporter.service
@@ -37,4 +41,4 @@ run: stamp-pip-install
 	  PYTHONPATH=src \
 	  PYTHONDEVMODE=1 \
 	  CERTMONGER_EXPORTER_LOG_LEVEL=debug \
-	    python3 -m certmonger_exporter
+	    $(PYTHON) -m certmonger_exporter

@@ -28,12 +28,12 @@ requests, as well as certmonger itself.
 
 
 %build
-%make_build
+%make_build PYTHON:=%{python3}
 
 
 %install
 rm -rf "$RPM_BUILD_ROOT"
-%make_install sysconfdir:=%{_sysconfdir} prefix:=%{_prefix} libexecdir:=%{_libexecdir}
+%make_install sysconfdir:=%{_sysconfdir} prefix:=%{_prefix} libexecdir:=%{_libexecdir} PYTHON:=%{python3}
 install -d %{?buildroot}%{_prefix}/lib
 mv -t %{?buildroot}%{_prefix}/lib %{?buildroot}/etc/systemd/
 install -d %{?buildroot}%{_datadir}
