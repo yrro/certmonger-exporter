@@ -8,7 +8,7 @@ URL:            https://github.com/yrro/certmonger-exporter
 Source0:        https://github.com/yrro/certmonger-exporter/archive/refs/heads/%{version}.tar.gz#/%{name}-%{version}.tar.gz
 
 BuildRequires:  make
-BuildRequires:  python3
+BuildRequires:  python3-devel
 BuildRequires:  python3-pip
 Requires:       python3
 Requires:       python3-systemd
