@@ -7,7 +7,7 @@ libexecdir ?= $(prefix)/libexec
 all: certmonger-exporter.pyz
 
 stamp-pip-install: requirements.txt
-	python3 -m pip install -r requirements.txt -t src
+	PIP_REQUIRE_VIRTUALENV=false python3 -m pip install -r requirements.txt -t src
 	touch stamp-pip-install
 
 src/__main__.py:
