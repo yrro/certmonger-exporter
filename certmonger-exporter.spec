@@ -22,7 +22,6 @@ BuildArch:      noarch
 Exports metrics allowing the monitoring of certmonger's certificate tracking
 requests, as well as certmonger itself.
 
-%global debug_package %{nil}
 
 %prep
 %autosetup
