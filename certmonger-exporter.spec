@@ -9,6 +9,7 @@ Source0:        https://github.com/yrro/certmonger-exporter/archive/refs/heads/%
 
 BuildRequires:  make
 BuildRequires:  python3
+BuildRequires:  python3-pip
 Requires:       python3
 Requires:       python3-systemd
 Requires:       python3-dbus
