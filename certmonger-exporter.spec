@@ -44,6 +44,8 @@ mv -t %{?buildroot}%{_datadir} %{?buildroot}/etc/dbus-1
 %{_datadir}/dbus-1/system.d/certmonger-exporter.dbus.conf
 %{_prefix}/lib/systemd/system/certmonger-exporter.service
 %{_libexecdir}/certmonger-exporter.pyz
+%{_mandir}/man8/certmonger-exporter.8.gz
+%{_defaultdocdir}/certmonger-exporter/prometheus-rules.yaml
 %license COPYING
 
 
