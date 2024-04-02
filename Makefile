@@ -55,10 +55,11 @@ install:
 	$(INSTALL) -t $(DESTDIR)$(sysconfdir)/systemd/system -m 644 certmonger-exporter.service
 	$(INSTALL) -d $(DESTDIR)$(sysconfdir)/dbus-1/system.d
 	$(INSTALL) -t $(DESTDIR)$(sysconfdir)/dbus-1/system.d -m 644 certmonger-exporter.dbus.conf
-	$(INSTALL) -t $(DESTDIR)$(mandir)/8 certmonger.8
-	gzip -9 $(DESTDIR)$(mandir)/8/certmonger.8
+	$(INSTALL) -d $(DESTDIR)$(mandir)/man8
+	$(INSTALL) -t $(DESTDIR)$(mandir)/man8 -m 644 certmonger-exporter.8
+	gzip -9 $(DESTDIR)$(mandir)/man8/certmonger-exporter.8
 	$(INSTALL) -d $(DESTDIR)$(docdir)/certmonger-exporter
-	$(INSTALL) -t $(DESTDIR)$(docdir)/certmonger-exporter prometheus-rules.yaml
+	$(INSTALL) -t $(DESTDIR)$(docdir)/certmonger-exporter -m 644 prometheus-rules.yaml
 
 .PHONY: run
 run: stamp-pip-install
