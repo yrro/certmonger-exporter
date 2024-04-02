@@ -7,6 +7,7 @@ datadir ?= $(prefix)/share
 mandir ?= $(datadir)/man
 docdir ?= $(datadir)/doc
 user ?= nobody
+version = main
 
 .PHONY: all
 all: certmonger-exporter.pyz certmonger-exporter.pyz certmonger-exporter.service certmonger-exporter.8 certmonger-exporter.dbus.conf
@@ -37,6 +38,7 @@ certmonger-exporter.8: certmonger-exporter.8.in
 	  $(PYTHON) template.py \
 	    prometheus_rules!groff_path=$(docdir)/prometheus-rules.yaml \
 	    user!groff=$(user) \
+	    version!groff=$(version) \
 	    > $@
 
 certmonger-exporter.dbus.conf: certmonger-exporter.dbus.conf.in

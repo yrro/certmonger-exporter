@@ -1,4 +1,4 @@
-.TH certmonger\-exporter 8 2024-03-29 main
+.TH certmonger\-exporter 8 2024-03-29 "certmonger\-exporter ${version}"
 .
 .SH NAME
 certmonger\-exporter \- Prometheus exporter for certmonger
