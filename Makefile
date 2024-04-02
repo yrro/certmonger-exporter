@@ -12,7 +12,7 @@ stamp-pip-install: requirements.txt
 	touch stamp-pip-install
 
 src/__main__.py:
-	ln -sr -t src src/certmonger_exporter/__main__.py
+	ln -srf -t src src/certmonger_exporter/__main__.py
 
 certmonger-exporter.pyz: stamp-pip-install $(find src -type f) src/__main__.py
 	find src -name '*.pyc' -delete
