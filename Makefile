@@ -6,9 +6,10 @@ libexecdir ?= $(prefix)/libexec
 datadir ?= $(prefix)/share
 mandir ?= $(datadir)/man
 docdir ?= $(datadir)/doc
+user ?= nobody
 
 .PHONY: all
-all: certmonger-exporter.pyz
+all: certmonger-exporter.pyz certmonger-exporter.pyz certmonger-exporter.service certmonger-exporter.8 certmonger-exporter.dbus.conf
 
 stamp-pip-install: requirements.txt
 	PIP_REQUIRE_VIRTUALENV=false $(PYTHON) -m pip install -r requirements.txt -t src
@@ -28,16 +29,24 @@ certmonger-exporter.service: certmonger-exporter.service.in
 	  $(PYTHON) template.py \
 	    python=$(PYTHON) \
 	    libexecdir=$(libexecdir) \
+	    user=$(user) \
 	    > $@
 
 certmonger-exporter.8: certmonger-exporter.8.in
 	< $< \
 	  $(PYTHON) template.py \
 	    prometheus_rules!groff_path=$(docdir)/prometheus-rules.yaml \
+	    user!groff=$(user) \
+	    > $@
+
+certmonger-exporter.dbus.conf: certmonger-exporter.dbus.conf.in
+	< $< \
+	  $(PYTHON) template.py \
+	    user=$(user) \
 	    > $@
 
 .PHONY: install
-install: certmonger-exporter.pyz certmonger-exporter.service certmonger-exporter.8
+install:
 	$(INSTALL) -d $(DESTDIR)$(libexecdir)
 	$(INSTALL) -t $(DESTDIR)$(libexecdir) -m 644 certmonger-exporter.pyz
 	$(INSTALL) -d $(DESTDIR)$(sysconfdir)/systemd/system

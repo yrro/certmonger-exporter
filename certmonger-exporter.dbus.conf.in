@@ -3,7 +3,7 @@
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
 <busconfig>
 
-  <policy user="nobody">
+  <policy user="${user}">
     <!-- python-dbus needs to be able to introspect objects -->
     <allow send_destination="org.fedorahosted.certmonger" send_interface="org.freedesktop.DBus.Introspectable"
            send_member="Introspect"/>

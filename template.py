@@ -17,6 +17,8 @@ def main(argv):
                 value = re.sub(r"(/+)(\w)", r"\1\\:\2", value)
                 value = re.sub(r"(\w)(\.+)", r"\1\\:\2", value)
                 value = re.sub(r"-", r"\-", value)
+            elif filter_ == "groff":
+                value = re.sub(r"-", r"\-", value)
 
         mapping[name] = value
 

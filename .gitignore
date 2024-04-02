@@ -4,3 +4,5 @@ __pycache__/
 *.pyz
 /stamp-*
 /certmonger-exporter.8
+/certmonger-exporter.dbus.conf
+/certmonger-exporter.service

@@ -3,7 +3,7 @@ Documentation=man:certmonger-exporter(8)
 
 [Service]
 Type=notify
-User=nobody
+User=${user}
 ExecStart=${python} -I ${libexecdir}/certmonger-exporter.pyz
 Restart=always
 

@@ -104,7 +104,7 @@ Normally, only the
 .I root
 user is allowed to access this API,
 so we ship a D-Bus policy which grants the
-.I nobody
+.I ${user}
 user read-only access to the API.
 The user is not able to make any changes to,
 or read the private keys of any tracking requests.
