@@ -19,8 +19,8 @@ BuildArch:      noarch
 
 
 %description
-Exports metrics allowing the monitoring of certmonger's certificate tracking
-requests, as well as certmonger itself.
+Collects metrics for monitoring certmonger's certificate tracking requests, as
+well as certmonger itself.
 
 
 %prep
@@ -33,7 +33,7 @@ requests, as well as certmonger itself.
 
 %install
 rm -rf "$RPM_BUILD_ROOT"
-%make_install sysconfdir:=%{_sysconfdir} prefix:=%{_prefix} libexecdir:=%{_libexecdir} PYTHON:=%{python3}
+%make_install sysconfdir:=%{_sysconfdir} prefix:=%{_prefix} libexecdir:=%{_libexecdir} datadir:=%{_datadir} mandir:=%{_mandir} PYTHON:=%{python3}
 install -d %{?buildroot}%{_prefix}/lib
 mv -t %{?buildroot}%{_prefix}/lib %{?buildroot}/etc/systemd/
 install -d %{?buildroot}%{_datadir}
@@ -45,8 +45,6 @@ mv -t %{?buildroot}%{_datadir} %{?buildroot}/etc/dbus-1
 %{_prefix}/lib/systemd/system/certmonger-exporter.service
 %{_libexecdir}/certmonger-exporter.pyz
 %license COPYING
-%doc README.md
-%doc prometheus-rules.yaml
 
 
 %post

@@ -1,7 +1,10 @@
+[Unit]
+Documentation=man:certmonger-exporter(8)
+
 [Service]
 Type=notify
 User=nobody
-ExecStart=@python@ -I @libexecdir@/certmonger-exporter.pyz
+ExecStart=${python} -I ${libexecdir}/certmonger-exporter.pyz
 Restart=always
 
 [Install]

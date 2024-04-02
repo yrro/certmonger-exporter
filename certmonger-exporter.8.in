@@ -1,0 +1,116 @@
+.TH certmonger\-exporter 8 2024-03-29 main
+.
+.SH NAME
+certmonger\-exporter \- Prometheus exporter for certmonger
+.
+.SH SYNOPSIS
+.SY certmonger\-exporter
+.YS
+.
+.SH DESCRIPTION
+Collects metrics for monitoring
+.MR certmonger 8 's
+certificate tracking requests, as well as
+.MR certmonger 8
+itself.
+.P
+Once the exporter is started,
+metrics can be viewed locally with a command such as:
+.P
+.EX
+curl localhost:9632/metrics
+.EE
+.
+.SS "Exported metrics"
+.TP
+certmonger_request_ca_error
+1 if the CA returned an error when certificate signing was requested
+.TP
+certmonger_request_key_generated_date_seconds
+Timestamp the private key was generated
+.TP
+certmonger_request_key_issued_count
+number of times a certificate was issued for the private key
+.TP
+certmonger_request_last_checked_date_seconds
+Timestamp of last check for expiration
+.TP
+certmonger_request_not_valid_after_date_seconds
+Timestamp of certificate expiry
+.TP
+certmonger_request_not_valid_before_date_seconds
+Timestamp after which certificate is valid
+.TP
+certmonger_request_stuck
+1 if request is stuck
+.TP
+certmonger_requests_total
+Number of certificates managed by Certonger
+.TP
+certmonger_enabled
+1 if the certmonger service is enabled
+.
+.SS "Sample prometheus configuration"
+Place the following in the
+.B scrape_configs
+list in your
+.B prometheus.yml
+file:
+.P
+.EX
+- job_name: certmonger
+  static_configs:
+  - targets:
+    - myhost.example.com:9632
+.EE
+.
+.SS "Sample prometheus rules"
+Sample alerting rules can be found at
+.IR ${prometheus_rules} .
+.
+.SH ENVIRONMENT
+.B certmonger\-exporter
+can be configured by setting environment variables.
+The easiest way to do this is by running
+.I systemctl edit certmonger\-exporter.service
+and then adding a
+.I [Service]
+section containing one or more
+.I Environment=
+options.
+.TP
+CERTMONGER_EXPORTER_LOG_LEVEL
+Can be set to
+.IR DEBUG ,
+.IR INFO
+(default),
+.IR WARN ,
+.IR ERROR
+or
+.IR CRITICAL .
+.TP
+CERTMONGER_EXPORTER_PORT
+Specifies the port on which the exporter listens.
+Defaults to
+.IR 9632 .
+.
+.SH NOTES
+The exporter uses
+.MR certmonger 8 's
+.UR https://\:pagure\:.io/\:certmonger/\:blob/\:master/\:f\:/src/\:tdbus\:.h
+D-Bus API
+.UE .
+Normally, only the
+.I root
+user is allowed to access this API,
+so we ship a D-Bus policy which grants the
+.I nobody
+user read-only access to the API.
+The user is not able to make any changes to,
+or read the private keys of any tracking requests.
+.
+.SH SEE ALSO
+Bugs, enhancements, rants and raves can be filed at the
+.UR http://\:github\:.com\:/yrro\:/certmonger\-exporter
+GitHub project page
+.UE .

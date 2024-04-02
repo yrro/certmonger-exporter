@@ -3,6 +3,9 @@ PYTHON ?= python3
 prefix ?= /usr/local
 sysconfdir ?= /etc
 libexecdir ?= $(prefix)/libexec
+datadir ?= $(prefix)/share
+mandir ?= $(datadir)/man
+docdir ?= $(datadir)/doc
 
 .PHONY: all
 all: certmonger-exporter.pyz
@@ -21,19 +24,30 @@ certmonger-exporter.pyz: stamp-pip-install $(find src -type f) src/__main__.py
 	$(PYTHON) -m zipapp -o certmonger-exporter.pyz src
 
 certmonger-exporter.service: certmonger-exporter.service.in
-	sed \
-	  -e s,@libexecdir@,$(libexecdir), \
-	  -e s,@python@,$(PYTHON), \
-	  $< > $@
+	< $< \
+	  $(PYTHON) template.py \
+	    python=$(PYTHON) \
+	    libexecdir=$(libexecdir) \
+	    > $@
+
+certmonger-exporter.8: certmonger-exporter.8.in
+	< $< \
+	  $(PYTHON) template.py \
+	    prometheus_rules!groff_path=$(docdir)/prometheus-rules.yaml \
+	    > $@
 
 .PHONY: install
-install: certmonger-exporter.pyz certmonger-exporter.service
+install: certmonger-exporter.pyz certmonger-exporter.service certmonger-exporter.8
 	$(INSTALL) -d $(DESTDIR)$(libexecdir)
 	$(INSTALL) -t $(DESTDIR)$(libexecdir) -m 644 certmonger-exporter.pyz
 	$(INSTALL) -d $(DESTDIR)$(sysconfdir)/systemd/system
 	$(INSTALL) -t $(DESTDIR)$(sysconfdir)/systemd/system -m 644 certmonger-exporter.service
 	$(INSTALL) -d $(DESTDIR)$(sysconfdir)/dbus-1/system.d
 	$(INSTALL) -t $(DESTDIR)$(sysconfdir)/dbus-1/system.d -m 644 certmonger-exporter.dbus.conf
+	$(INSTALL) -t $(DESTDIR)$(mandir)/8 certmonger.8
+	gzip -9 $(DESTDIR)$(mandir)/8/certmonger.8
+	$(INSTALL) -d $(DESTDIR)$(docdir)/certmonger-exporter
+	$(INSTALL) -t $(DESTDIR)$(docdir)/certmonger-exporter prometheus-rules.yaml
 
 .PHONY: run
 run: stamp-pip-install

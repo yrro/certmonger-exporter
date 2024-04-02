@@ -3,3 +3,4 @@
 __pycache__/
 *.pyz
 /stamp-*
+/certmonger-exporter.8
