@@ -7,7 +7,7 @@ datadir ?= $(prefix)/share
 mandir ?= $(datadir)/man
 docdir ?= $(datadir)/doc
 user ?= nobody
-version = main
+version = 0.1
 
 .PHONY: all
 all: certmonger-exporter.pyz certmonger-exporter.pyz certmonger-exporter.service certmonger-exporter.8 certmonger-exporter.dbus.conf

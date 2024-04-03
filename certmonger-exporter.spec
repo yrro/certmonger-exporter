@@ -1,5 +1,5 @@
 Name:           certmonger-exporter
-Version:        main
+Version:        0.1
 Release:        1%{?dist}
 Summary:        Prometheus exporter for Certmonger
 
