@@ -28,7 +28,7 @@ certmonger-exporter.pyz: stamp-pip-install $(find src -type f) src/__main__.py
 certmonger-exporter.service: certmonger-exporter.service.in
 	< $< \
 	  $(PYTHON) template.py \
-	    python=$(PYTHON) \
+	    python=$$(which $(PYTHON)) \
 	    libexecdir=$(libexecdir) \
 	    user=$(user) \
 	    > $@
