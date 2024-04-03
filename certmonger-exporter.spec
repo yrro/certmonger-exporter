@@ -5,7 +5,7 @@ Summary:        Prometheus exporter for Certmonger
 
 License:        GPLv3
 URL:            https://github.com/yrro/certmonger-exporter
-Source0:        https://github.com/yrro/certmonger-exporter/archive/refs/heads/%{version}.tar.gz#/%{name}-%{version}.tar.gz
+Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  make
 BuildRequires:  python3-devel
@@ -63,5 +63,8 @@ mv -t %{?buildroot}%{_datadir} %{?buildroot}/etc/dbus-1
 
 
 %changelog
+* Wed Apr 03 2024 Sam Morris <sam@robots.org.uk> 0.1-1
+- new package built with tito
+
 * Thu Mar 28 2024 Sam Morris <sam@robots.org.uk>
 - Initial package
