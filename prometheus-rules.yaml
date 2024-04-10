@@ -28,7 +28,7 @@ groups:
         View details with 'certmonger list -i {{ $labels.nickname }}'.
         View certmonger logs with 'journalctl -u certmonger'.
   - alert: CertmongerRequestNotCheckedRecently
-    expr: time() - certmonger_request_last_checked_date_seconds > 86400
+    expr: time() - certmonger_request_last_checked_date_seconds > 2 * 86400
     annotations:
       summary: Certificate tracking request was last checked {{ $value | humanizeDuration }} ago
       description: |
