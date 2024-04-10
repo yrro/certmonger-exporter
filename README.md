@@ -63,22 +63,23 @@ file](certmonger-exporter.service).
 
 ## How to install
 
-To build and install an RPM on CentOS Stream (or RHEL) 8:
+To build an RPM you will need
+[tito](https://github.com/rpm-software-management/tito?tab=readme-ov-file#install)
+to be installed.
 
 ```
-# dnf install rpmdevtools
-
-$ rpmdev-setuptree
-
-$ spectool -f -R -g certmonger-expoter.spec
-
-$ rpmbuild -ba certmonger-exporter.spec
-
-# dnf install ~/rpmbuild/RPMS/noarch/certmonger-exporter-main-1.el8.noarch.rpm
+$ tito build --rpm --test
 ```
 
-(For the time being we're building directly from the `main` branch, so the
-exact rpm filename is subject to change.)
+The last thing `tito` will do is print out the path of the RPM that it just
+built. Pass this to `dnf install` to install the RPM.
+
+To build an RPM in a clean chroot environment,
+[mock](https://github.com/rpm-software-management/mock) can be used:
+
+```
+$ tito build --rpm --test --builder mock --arg mock=rhel-9-x86_64 --arg mock_args=--enable-network
+```
 
 To enable, start & test:
 
