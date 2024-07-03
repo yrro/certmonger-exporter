@@ -54,8 +54,14 @@ API](https://pagure.io/certmonger/blob/master/f/src/tdbus.h). Normally access
 to this API is restricted to `root`; however we don't want to write a
 network-facing service that runs as root.
 
-The solution and modify D-Bus policy to allow `nobody` to query certmonger, and
-run the exporter as this non-privileged user.
+The solution is to modify D-Bus policy to allow `nobody` to query certmonger,
+and run the exporter as this non-privileged user.
+
+**Note that this exposes sensitive properties of certificate tracking requests
+to the `nobody` user**. This includes the `key-pin` property, which exposes the
+password used to encrypt a request's private key file on disk. This is a
+low-value secret which is itself stored on the disk in plain-text; access to
+requests' private key files themselves is not granted.
 
 If you prefer to use another user, you only need to edit [the D-Bus policy
 file](certmonger-exporter.dbus.conf) and [the systemd unit
