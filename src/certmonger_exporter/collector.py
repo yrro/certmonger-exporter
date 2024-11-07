@@ -71,6 +71,7 @@ class CertmongerCollector:
 
         mf_requests_total = GaugeMetricFamily("certmonger_requests_total", "Number of certificates managed by Certmonger")
         mfs = [
+            GaugeMetricFamily("certmonger_request_status", "State of each tracking request (MONITORING is good; there are a lot of states, and most are transient, so only the current state is emitted", labels=(*labelnames, "status")),
             GaugeMetricFamily("certmonger_request_ca_error", "1 if the CA returned an error when certificate signing was requested", labels=labelnames),
             GaugeMetricFamily("certmonger_request_key_generated_date_seconds", "Timestamp the private key was generated", labels=labelnames),
             GaugeMetricFamily("certmonger_request_key_issued_count", "number of times a certificate was issued for the private key", labels=labelnames),
@@ -122,6 +123,7 @@ class CertmongerCollector:
 
         labelvalues = nickname, ca, storage_type, storage_location, storage_nickname, storage_token
 
+        mfs_by_name["certmonger_request_status"].add_metric((*labelvalues, request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "status")), 1)
         mfs_by_name["certmonger_request_ca_error"].add_metric(labelvalues, 1 if request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "ca-error") else 0)
 
         key_generated_date = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "key-generated-date")
