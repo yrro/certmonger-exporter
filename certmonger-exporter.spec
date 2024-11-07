@@ -10,6 +10,7 @@ Source0:        %{name}-%{version}.tar.gz
 BuildRequires:  make
 BuildRequires:  python3-devel
 BuildRequires:  python3-pip
+BuildRequires:  systemd-rpm-macros
 Requires:       python3
 Requires:       python3-systemd
 Requires:       python3-dbus
