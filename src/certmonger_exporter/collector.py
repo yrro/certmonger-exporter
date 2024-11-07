@@ -89,7 +89,7 @@ class CertmongerCollector:
                 request = self.__bus.get_object(CERTMONGER_DBUS_SERVICE, request_obj)
                 self.__collect_request(mfs_by_name, request)
 
-            mf_requests_total.add_metric([], i+i)
+            mf_requests_total.add_metric([], i+1)
 
         yield from mfs
         yield mf_requests_total
