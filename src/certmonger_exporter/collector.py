@@ -34,8 +34,8 @@ class CertmongerCollector:
 
 
     def collect(self, describe=False):
-        yield from self.__collect_requests(describe)
         yield from self.__collect_certmonger(describe)
+        yield from self.__collect_requests(describe)
 
 
     def describe(self):
@@ -67,9 +67,10 @@ class CertmongerCollector:
 
 
     def __collect_requests(self, describe):
-        labelnames = "nickname", "ca", "storage_type", "storage_location", "storage_nickname", "storage_token"
+        mf_up = GaugeMetricFamily("certmonger_up", "1 if certmonger was contactable via D-Bus")
 
         mf_requests_total = GaugeMetricFamily("certmonger_requests_total", "Number of certificates managed by Certmonger")
+        labelnames = "nickname", "ca", "storage_type", "storage_location", "storage_nickname", "storage_token"
         mfs = [
             GaugeMetricFamily("certmonger_request_status", "State of each tracking request (MONITORING is good; there are a lot of states, and most are transient, so only the current state is emitted", labels=(*labelnames, "status")),
             GaugeMetricFamily("certmonger_request_ca_error", "1 if the CA returned an error when certificate signing was requested", labels=labelnames),
@@ -84,15 +85,24 @@ class CertmongerCollector:
         if not describe:
             mfs_by_name = {mf.name: mf for mf in mfs}
 
-            certmonger = self.__bus.get_object(CERTMONGER_DBUS_SERVICE, CERTMONGER_DBUS_CERTMONGER_OBJECT)
-            for i, request_obj in enumerate(certmonger.get_requests(dbus_interface=CERTMONGER_DBUS_CERTMONGER_INTERFACE)):
-                request = self.__bus.get_object(CERTMONGER_DBUS_SERVICE, request_obj)
-                self.__collect_request(mfs_by_name, request)
+            try:
+                certmonger = self.__bus.get_object(CERTMONGER_DBUS_SERVICE, CERTMONGER_DBUS_CERTMONGER_OBJECT)
+            except dbus.DBusException as e:
+                logger.exception("While getting service:%r object:%r: %s", CERTMONGER_DBUS_SERVICE, CERTMONGER_DBUS_CERTMONGER_OBJECT, e)
+                up = 0
+            else:
+                up = 1
+                for i, request_obj in enumerate(certmonger.get_requests(dbus_interface=CERTMONGER_DBUS_CERTMONGER_INTERFACE)):
+                    request = self.__bus.get_object(CERTMONGER_DBUS_SERVICE, request_obj)
+                    self.__collect_request(mfs_by_name, request)
 
-            mf_requests_total.add_metric([], i+1)
+                mf_requests_total.add_metric((), i+1)
 
-        yield from mfs
+            mf_up.add_metric((), up)
+
+        yield mf_up
         yield mf_requests_total
+        yield from mfs
 
 
     def __collect_request(self, mfs_by_name, request):
