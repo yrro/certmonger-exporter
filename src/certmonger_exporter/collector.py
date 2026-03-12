@@ -130,6 +130,8 @@ class CertmongerCollector:
             storage_location = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "cert-database")
             storage_nickname = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "cert-nickname")
             storage_token = request_props.Get(CERTMONGER_DBUS_REQUEST_INTERFACE, "cert-token")
+        else:
+            logger.warning("Tracking request %r has unknown storage type %r", nickname, storage_type)
 
         labelvalues = nickname, ca, storage_type, storage_location, storage_nickname, storage_token
 
